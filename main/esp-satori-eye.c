@@ -6,6 +6,7 @@
 #include "esp_camera.h"
 #include "camera.h"
 #include "wifi.h"
+#include "web_server.h"
 #define TAG "app_main"
 
 void app_main(void)
@@ -16,17 +17,9 @@ void app_main(void)
         return;
     }
     wifi_init_softap();
+    start_webserver();
+    ESP_LOGI(TAG, "System Ready! Connect to WiFi 'Satori-Eye' and visit http://192.168.4.1/stream");
     while (1) {
-        camera_fb_t *pic = esp_camera_fb_get();
-        if (pic) {
-            ESP_LOGI("Camera", "Picture taken! Size: %zu bytes, Width: %d, Height: %d",
-                     pic->len, pic->width, pic->height);
-
-            esp_camera_fb_return(pic);
-        } else {
-            ESP_LOGE("Camera", "Failed to capture frame!");
-        }
-
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }

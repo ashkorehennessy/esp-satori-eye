@@ -27,7 +27,7 @@ static camera_config_t camera_config = {
     .pixel_format = PIXFORMAT_JPEG,
     .frame_size = FRAMESIZE_QVGA,
     .fb_location = CAMERA_FB_IN_PSRAM,
-    .jpeg_quality = 12,
+    .jpeg_quality = 8,
     .fb_count = 2,
     .grab_mode = CAMERA_GRAB_LATEST
 };
@@ -40,8 +40,8 @@ esp_err_t camera_init() {
         return err;
     }
     sensor_t *s = esp_camera_sensor_get();
-    s->set_vflip(s, 0);
-    s->set_hmirror(s, 0);
+    s->set_vflip(s, 1);
+    s->set_hmirror(s, 1);
     ESP_LOGI(TAG, "Camera initialized");
     return ESP_OK;
 }
