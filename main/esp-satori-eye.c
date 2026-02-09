@@ -5,6 +5,7 @@
 #include "esp_log.h"
 #include "esp_camera.h"
 #include "camera.h"
+#include "wifi.h"
 #define TAG "app_main"
 
 void app_main(void)
@@ -14,6 +15,7 @@ void app_main(void)
         ESP_LOGE(TAG, "System Halted");
         return;
     }
+    wifi_init_softap();
     while (1) {
         camera_fb_t *pic = esp_camera_fb_get();
         if (pic) {
