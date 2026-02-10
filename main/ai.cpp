@@ -1,5 +1,5 @@
 #include "ai.h"
-// #include "espdet_detect.hpp"
+#include "cat_detect.hpp"
 #include "dl_image_jpeg.hpp"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
@@ -52,7 +52,7 @@ extern "C" void ai_decode_jpeg_wrapper(uint8_t *jpg_data, size_t jpg_len, uint8_
 
 extern "C" void ai_inference_task(void *arg) {
     // 初始化模型
-    // ESPDetDetect *detect = new ESPDetDetect();
+    auto *detect = new CatDetect();
     uint8_t *current_rgb_buf = nullptr;
 
     ESP_LOGI(TAG, "Core 1 AI Task Started");
@@ -69,12 +69,15 @@ extern "C" void ai_inference_task(void *arg) {
             img.pix_type = dl::image::DL_IMAGE_PIX_TYPE_RGB888;
 
             // 推理
-            // auto &detect_results = detect->run(img);
+            int64_t start_time = esp_timer_get_time();
+            auto &detect_results = detect->run(img);
+            int64_t end_time = esp_timer_get_time();
 
             // 打印结果
-            // for (const auto &res : detect_results) {
-            //     ESP_LOGI(TAG, "Det: Cat:%d Score:%.2f", res.category, res.score);
-            // }
+            for (const auto &res : detect_results) {
+                ESP_LOGI(TAG, "Det: Cat:%d Score:%.2f, time:%dms", res.category, res.score, end_time-start_time);
+            }
         }
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 }

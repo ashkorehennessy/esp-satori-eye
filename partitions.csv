@@ -5,4 +5,4 @@ phy_init, data, phy,     ,        0x1000,
 # Factory 分区
 factory,  app,  factory, ,        8M,
 # SPIFFS/LittleFS 分区
-storage,  data, spiffs,  ,        4M,
+cat_det,  data, spiffs,  ,        4M,

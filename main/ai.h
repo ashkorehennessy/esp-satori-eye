@@ -3,7 +3,7 @@
 #include "freertos/FreeRTOS.h"
 
 // AI 模型输入参数
-#define AI_W 320
+#define AI_W 240
 #define AI_H 240
 #define AI_RGB_SIZE (AI_W * AI_H * 3)
 
