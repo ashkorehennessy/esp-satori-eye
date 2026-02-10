@@ -8,7 +8,7 @@
 #include "wifi.h"
 #include "web_server.h"
 #define TAG "app_main"
-
+void start_benchmark(void);
 void app_main(void)
 {
     esp_err_t err = camera_init();
@@ -17,6 +17,7 @@ void app_main(void)
         return;
     }
     wifi_init_softap();
+    start_benchmark();
     start_webserver();
     ESP_LOGI(TAG, "System Ready! Connect to WiFi 'Satori-Eye' and visit http://192.168.4.1/stream");
     while (1) {
