@@ -8,11 +8,11 @@
 static volatile bool g_bench_running = true;
 
 // 通用的测试任务函数
-void IRAM_ATTR benchmark_task(void *arg) {
+void benchmark_task(void *arg) {
     // 获取传入的核心 ID (0 或 1)
     int core_id = (int)arg;
 
-    // 创建不同的 TAG，方便在日志里一眼区分
+    // 创建不同的 TAG，方便在日志里区分
     char TASK_TAG[16];
     snprintf(TASK_TAG, sizeof(TASK_TAG), "BENCH_C%d", core_id);
 
@@ -22,7 +22,7 @@ void IRAM_ATTR benchmark_task(void *arg) {
     ESP_LOGW(TASK_TAG, "Started on Core %d", xPortGetCoreID());
 
     while (g_bench_running) {
-        // === 模拟负载 (和之前完全一样的算法) ===
+        // === 模拟负载 ===
         volatile uint32_t dummy = 0;
         for(int i=0; i<1000; i++) {
             dummy++;
@@ -38,7 +38,7 @@ void IRAM_ATTR benchmark_task(void *arg) {
             counter = 0;
             start_time = now;
 
-            // 喂狗，防 Core Dump
+            // 喂狗
             vTaskDelay(pdMS_TO_TICKS(10));
         }
     }
@@ -46,11 +46,12 @@ void IRAM_ATTR benchmark_task(void *arg) {
 }
 
 void start_benchmark(void) {
+    // 理论最大得分为25000ops/sec，由于优先级设置为IDLE_PRIORITY，和IDLE平分时间片，所以实际上限为12500ops/sec
     // 启动 Core 0 的测试任务
-    // 堆栈给 4096 防止溢出，优先级 1 (最低)，参数传入 (void*)0
-    xTaskCreatePinnedToCore(benchmark_task, "bench_c0", 4096, (void*)0, 1, NULL, 0);
+    // 堆栈给 4096 防止溢出，优先级 0 (最低)，参数传入 (void*)0
+    xTaskCreatePinnedToCore(benchmark_task, "bench_c0", 4096, (void*)0, tskIDLE_PRIORITY, NULL, 0);
 
     // 启动 Core 1 的测试任务
     // 参数传入 (void*)1，绑定到核心 1
-    xTaskCreatePinnedToCore(benchmark_task, "bench_c1", 4096, (void*)1, 1, NULL, 1);
+    xTaskCreatePinnedToCore(benchmark_task, "bench_c1", 4096, (void*)1, tskIDLE_PRIORITY, NULL, 1);
 }

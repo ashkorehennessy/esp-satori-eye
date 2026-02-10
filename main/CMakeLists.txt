@@ -3,4 +3,5 @@ idf_component_register(SRCS "esp-satori-eye.c"
                             "wifi.c"
                             "web_server.c"
                             "benchmark.c"
+                            "ai.cpp"
                     INCLUDE_DIRS ".")
