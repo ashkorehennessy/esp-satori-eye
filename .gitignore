@@ -1,6 +1,7 @@
 # build dir
 build/
 /cmake-build-*/
+/main/web_src/index.html.gz
 
 # Python cache
 __pycache__/

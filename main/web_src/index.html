@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Satori Eye Configuration</title>
+    <style>
+        :root {
+            /* 配色系统 */
+            --bg-color: #FDFDFD;
+            --sidebar-width: 240px;
+            --text-main: #333333;
+            --text-sub: #888888;
+
+            --card-bg: #FCEEF5;
+            --accent-color: #6D5063;
+            --switch-off: #DDD;
+            --btn-pill-bg: #FFF0F6;
+            --btn-pill-hover: #EAD0DC;
+
+            --shadow-card: 0 8px 30px rgba(109, 80, 99, 0.08);
+        }
+
+        * { box-sizing: border-box; user-select: none; }
+
+        body {
+            margin: 0; padding: 0;
+            font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* === 侧边栏 === */
+        .sidebar {
+            width: var(--sidebar-width);
+            padding: 30px 20px;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #F5F5F5;
+            background: #FAFAFA;
+        }
+        .brand {
+            font-size: 20px; font-weight: 800; color: var(--accent-color);
+            margin-bottom: 40px; display: flex; align-items: center; gap: 10px;
+        }
+        .menu-group { margin-bottom: 25px; }
+        .menu-title { font-size: 12px; color: var(--text-sub); margin-bottom: 10px; padding-left: 10px; font-weight: 600; }
+        .menu-item {
+            display: flex; align-items: center; padding: 12px 15px;
+            border-radius: 10px; color: var(--text-main); cursor: pointer;
+            transition: 0.2s; font-size: 14px; font-weight: 500;
+        }
+        .menu-item.active { background-color: #FFF0F6; color: #E91E63; font-weight: 600; }
+        .menu-item:hover:not(.active) { background-color: #F0F0F0; }
+
+        /* === 主内容区 === */
+        .main-content {
+            flex: 1; padding: 30px 50px;
+            overflow-y: auto; display: flex; flex-direction: column; align-items: center;
+            justify-content: center;
+        }
+
+        /* === 核心卡片 === */
+        .device-stage {
+            background-color: var(--card-bg);
+            width: 100%; max-width: 860px;
+            border-radius: 24px;
+            padding: 30px 40px;
+            display: flex; flex-direction: column; align-items: center;
+            box-shadow: var(--shadow-card);
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        /* === 垂直缩放滑条容器 === */
+        .zoom-side-panel {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-55%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 50px;
+            z-index: 5;
+        }
+
+        /* 文字样式 */
+        .zoom-label-top, .zoom-label-bottom {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--accent-color);
+            opacity: 0.6;
+            text-align: center;
+            margin: 0;
+            /* 移除了 writing-mode */
+        }
+
+        /* 顶部文字给点下边距，防止贴着滑条 */
+        .zoom-label-top { margin-bottom: 10px; }
+
+        /* 底部文字给点上边距 */
+        .zoom-label-bottom { margin-top: 10px; }
+
+        /* 自定义垂直滑条 */
+        input[type=range].vertical-range {
+            -webkit-appearance: none;
+            width: 180px; /* 滑条物理长度 */
+            height: 6px;  /* 轨道粗细 */
+            background: transparent;
+
+            /* 旋转 -90度 */
+            transform: rotate(-90deg);
+            /* 用 margin 撑开旋转后的上下空间，防止覆盖文字 */
+            margin: 80px 0;
+        }
+
+        input[type=range].vertical-range::-webkit-slider-runnable-track {
+            width: 100%; height: 6px; cursor: pointer;
+            background: rgba(109, 80, 99, 0.2); border-radius: 3px;
+        }
+
+        input[type=range].vertical-range::-webkit-slider-thumb {
+            height: 18px; width: 18px; border-radius: 50%;
+            background: var(--accent-color); cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -6px;
+            box-shadow: 0 2px 6px rgba(109,80,99,0.4);
+            transition: transform 0.1s;
+        }
+
+        input[type=range].vertical-range:active::-webkit-slider-thumb { transform: scale(1.2); }
+
+
+        /* === 摄像头画面容器 === */
+        .camera-frame-wrapper {
+            width: 100%;
+            height: 480px;
+            display: flex; justify-content: center; align-items: center;
+            margin-bottom: 20px;
+            margin-top: 10px;
+            background-image: radial-gradient(#6D506320 1px, transparent 1px);
+            background-size: 20px 20px;
+            border-radius: 16px;
+            padding-right: 40px;
+        }
+
+        #stream {
+            width: 240px;
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+            image-rendering: pixelated;
+            transition: width 0.1s;
+            border: 4px solid #FFF;
+        }
+
+        /* === 底部控制面板 === */
+        .control-panel {
+            width: 100%;
+            display: flex; justify-content: space-between; align-items: flex-end;
+            padding-top: 20px;
+            padding-right: 40px;
+            border-top: 2px dashed rgba(109,80,99,0.1);
+        }
+
+        .switch-group { display: flex; gap: 30px; }
+        .switch-item { display: flex; flex-direction: column; gap: 8px; }
+        .switch-label { font-size: 12px; color: var(--accent-color); font-weight: 700; }
+
+        .toggle-switch { position: relative; display: inline-block; width: 50px; height: 26px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--switch-off); transition: .3s; border-radius: 26px;
+        }
+        .slider:before {
+            position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px;
+            background-color: white; transition: .3s; border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        input:checked + .slider { background-color: var(--accent-color); }
+        input:checked + .slider:before { transform: translateX(24px); }
+
+        .action-group { display: flex; gap: 12px; }
+        .btn-pill-small {
+            background-color: #FFF; border: 1px solid rgba(109,80,99,0.15); color: var(--accent-color);
+            padding: 8px 20px; border-radius: 20px; font-size: 13px; font-weight: 600;
+            cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.02); transition: all 0.2s;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .btn-pill-small:hover { background-color: var(--accent-color); color: white; transform: translateY(-2px); box-shadow: 0 4px 10px rgba(109,80,99,0.2); }
+        .btn-pill-small:active { transform: translateY(0); }
+
+        .ota-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(252, 238, 245, 0.95); border-radius: 24px; display: none;
+            flex-direction: column; justify-content: center; align-items: center; z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="brand"><span>👁️</span> SATORI DEVICE</div>
+        <div class="menu-group">
+            <div class="menu-title">设置</div>
+            <div class="menu-item active">📷 实时预览</div>
+            <div class="menu-item">🧠 模型配置</div>
+            <div class="menu-item">⚙️ 系统选项</div>
+        </div>
+        <div class="menu-group">
+            <div class="menu-title">资源</div>
+            <div class="menu-item" onclick="document.getElementById('fw_file').click()">🚀 固件升级</div>
+            <input type="file" id="fw_file" accept=".bin" style="display: none;" onchange="startOTA()">
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="device-stage">
+
+            <div class="zoom-side-panel">
+                <span class="zoom-label-top">ZOOM</span>
+                <input type="range" class="vertical-range" min="100" max="300" value="100" id="zoomSlider" oninput="updateZoom(this.value)">
+                <span class="zoom-label-bottom" id="zoomValue">100%</span>
+            </div>
+
+            <div class="camera-frame-wrapper">
+                <img id="stream" src="/stream" alt="Stream Loading...">
+            </div>
+
+            <div class="control-panel">
+                <div class="switch-group">
+                    <div class="switch-item">
+                        <span class="switch-label">启用 AI 推理</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="aiToggle" onchange="toggleAI(this)">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="switch-item">
+                        <span class="switch-label">Web 优先</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="action-group">
+                    <button class="btn-pill-small" onclick="snapshot()">
+                        <span>📷</span> 抓拍
+                    </button>
+                    <button class="btn-pill-small" onclick="switchModel()">
+                        <span>🔄</span> 切换模型
+                    </button>
+                    <button class="btn-pill-small" onclick="location.reload()">
+                        <span>🔃</span> 刷新
+                    </button>
+                </div>
+            </div>
+
+            <div id="ota-status" class="ota-overlay">
+                <h3 style="color: var(--accent-color);">Firmware Updating... <span id="progress-text">0%</span></h3>
+                <div style="width: 300px; height: 8px; background: #ddd; border-radius: 4px; overflow: hidden; margin-top: 10px;">
+                    <div id="progress-bar" style="width: 0%; height: 100%; background: var(--accent-color); transition: width 0.2s;"></div>
+                </div>
+                <p style="font-size: 12px; color: #888; margin-top: 10px;">请勿断开电源</p>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        function updateZoom(val) {
+            const img = document.getElementById('stream');
+            const newWidth = 240 * (val / 100);
+            img.style.width = newWidth + 'px';
+            document.getElementById('zoomValue').innerText = val + '%';
+        }
+
+        function startOTA() {
+            var fileInput = document.getElementById('fw_file');
+            var file = fileInput.files[0];
+            if (!file) return;
+            if(!confirm("确认刷入: " + file.name + " ?")) return;
+
+            document.getElementById('ota-status').style.display = 'flex';
+
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "/update", true);
+            xhr.upload.onprogress = function(e) {
+                if (e.lengthComputable) {
+                    var percent = (e.loaded / e.total) * 100;
+                    document.getElementById('progress-bar').style.width = percent + "%";
+                    document.getElementById('progress-text').innerText = percent.toFixed(0) + "%";
+                }
+            };
+            xhr.onload = function() {
+                if (xhr.status == 200) {
+                    alert("升级成功！正在重启...");
+                    location.reload();
+                } else {
+                    alert("失败: " + xhr.status);
+                    document.getElementById('ota-status').style.display = 'none';
+                }
+            };
+            xhr.send(file);
+        }
+
+        function toggleAI(checkbox) { console.log("AI State:", checkbox.checked); }
+        function snapshot() { console.log("Snapshot click"); }
+        function switchModel() { console.log("Switch model click"); }
+    </script>
+</body>
+</html>
