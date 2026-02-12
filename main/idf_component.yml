@@ -16,4 +16,3 @@ dependencies:
   #   public: true
   espressif/esp32-camera: '*'
   espressif/esp-dl: '*'
-  espressif/cat_detect: '*'
