@@ -4,24 +4,12 @@
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 #include <cstring>
+#include "context.h"
 
 static const char *TAG = "AI";
 
-uint8_t *g_ai_buf_a = nullptr;
-uint8_t *g_ai_buf_b = nullptr;
-QueueHandle_t xAIQueue = nullptr;
-
-extern "C" void ai_init_service(void) {
-    // 1. 分配两个巨大的 RGB 缓冲区
-    g_ai_buf_a = static_cast<uint8_t*>(heap_caps_malloc(AI_RGB_SIZE, MALLOC_CAP_SPIRAM));
-    g_ai_buf_b = static_cast<uint8_t*>(heap_caps_malloc(AI_RGB_SIZE, MALLOC_CAP_SPIRAM));
-
-    // 创建队列 (只存指针，深度为 2)
-    xAIQueue = xQueueCreate(2, sizeof(uint8_t *));
-
-    if (!g_ai_buf_a || !g_ai_buf_b) {
-        ESP_LOGE(TAG, "Failed to allocate AI buffers!");
-    }
+extern "C" void start_ai(void) {
+    xTaskCreatePinnedToCore(ai_inference_task, "AI_Task", 8192, NULL, 5, &CTX()->task_ai, 1);
 }
 
 
@@ -59,7 +47,7 @@ extern "C" void ai_inference_task(void *arg) {
 
     while (true) {
         // 阻塞等待 Core 0 传来的指针
-        if (xQueueReceive(xAIQueue, &current_rgb_buf, portMAX_DELAY) == pdTRUE) {
+        if (xQueueReceive(CTX()->q_ai_inference, &current_rgb_buf, portMAX_DELAY) == pdTRUE) {
 
             // 构造 img_t 给模型
             dl::image::img_t img;

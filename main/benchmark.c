@@ -3,9 +3,7 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_timer.h"
-
-// 全局开关
-static volatile bool g_bench_running = true;
+#include "context.h"
 
 // 通用的测试任务函数
 void benchmark_task(void *arg) {
@@ -21,7 +19,7 @@ void benchmark_task(void *arg) {
 
     ESP_LOGW(TASK_TAG, "Started on Core %d", xPortGetCoreID());
 
-    while (g_bench_running) {
+    while (CTX()->flags.is_bench_running) {
         // === 模拟负载 ===
         volatile uint32_t dummy = 0;
         for(int i=0; i<1000; i++) {
@@ -49,9 +47,9 @@ void start_benchmark(void) {
     // 理论最大得分为25000ops/sec，由于优先级设置为IDLE_PRIORITY，和IDLE平分时间片，所以实际上限为12500ops/sec
     // 启动 Core 0 的测试任务
     // 堆栈给 4096 防止溢出，优先级 0 (最低)，参数传入 (void*)0
-    xTaskCreatePinnedToCore(benchmark_task, "bench_c0", 4096, (void*)0, tskIDLE_PRIORITY, NULL, 0);
+    xTaskCreatePinnedToCore(benchmark_task, "bench_c0", 4096, (void*)0, tskIDLE_PRIORITY, &CTX()->task_bench_c0, 0);
 
     // 启动 Core 1 的测试任务
     // 参数传入 (void*)1，绑定到核心 1
-    xTaskCreatePinnedToCore(benchmark_task, "bench_c1", 4096, (void*)1, tskIDLE_PRIORITY, NULL, 1);
+    xTaskCreatePinnedToCore(benchmark_task, "bench_c1", 4096, (void*)1, tskIDLE_PRIORITY, &CTX()->task_bench_c1, 1);
 }

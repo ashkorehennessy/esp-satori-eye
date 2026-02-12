@@ -268,7 +268,7 @@
                 <div style="width: 300px; height: 8px; background: #ddd; border-radius: 4px; overflow: hidden; margin-top: 10px;">
                     <div id="progress-bar" style="width: 0%; height: 100%; background: var(--accent-color); transition: width 0.2s;"></div>
                 </div>
-                <p style="font-size: 12px; color: #888; margin-top: 10px;">请勿断开电源</p>
+                <p style="font-size: 12px; color: #888; margin-top: 10px;">如果太长时间卡住不动，请手动复位系统，进度条满时请勿断开电源</p>
             </div>
 
         </div>
@@ -288,29 +288,50 @@
             if (!file) return;
             if(!confirm("确认刷入: " + file.name + " ?")) return;
 
+            // 强制把图片源置空，浏览器会立即断开 /stream 的 TCP 连接
+            // 这样服务端的 stream_handler 就会退出循环，释放线程
+            document.getElementById('stream').src = "";
+
+            // 显示遮罩
             document.getElementById('ota-status').style.display = 'flex';
 
-            var xhr = new XMLHttpRequest();
-            xhr.open("POST", "/update", true);
-            xhr.upload.onprogress = function(e) {
-                if (e.lengthComputable) {
-                    var percent = (e.loaded / e.total) * 100;
-                    document.getElementById('progress-bar').style.width = percent + "%";
-                    document.getElementById('progress-text').innerText = percent.toFixed(0) + "%";
-                }
-            };
-            xhr.onload = function() {
-                if (xhr.status == 200) {
-                    alert("升级成功！正在重启...");
-                    location.reload();
-                } else {
-                    alert("失败: " + xhr.status);
-                    document.getElementById('ota-status').style.display = 'none';
-                }
-            };
-            xhr.send(file);
-        }
+            // 给服务端 500ms 的时间去处理“断开连接”的逻辑并退出循环
+            setTimeout(function() {
+                var xhr = new XMLHttpRequest();
+                xhr.open("POST", "/update", true);
 
+                // 增加超时设置，防止永久卡死
+                xhr.timeout = 60000; // 60秒超时
+
+                xhr.upload.onprogress = function(e) {
+                    if (e.lengthComputable) {
+                        var percent = (e.loaded / e.total) * 100;
+                        document.getElementById('progress-bar').style.width = percent + "%";
+                        document.getElementById('progress-text').innerText = percent.toFixed(0) + "%";
+                    }
+                };
+
+                xhr.onload = function() {
+                    if (xhr.status == 200) {
+                        alert("升级成功！正在重启...");
+                        location.reload();
+                    } else {
+                        // 如果失败了，恢复视频流
+                        alert("失败: " + xhr.status + " " + xhr.responseText);
+                        document.getElementById('ota-status').style.display = 'none';
+                        location.reload();
+                    }
+                };
+
+                xhr.onerror = function() {
+                    alert("网络错误，OTA中断");
+                    document.getElementById('ota-status').style.display = 'none';
+                    location.reload();
+                };
+
+                xhr.send(file);
+            }, 500); // 延迟 500ms 发送
+        }
         function toggleAI(checkbox) { console.log("AI State:", checkbox.checked); }
         function snapshot() { console.log("Snapshot click"); }
         function switchModel() { console.log("Switch model click"); }
