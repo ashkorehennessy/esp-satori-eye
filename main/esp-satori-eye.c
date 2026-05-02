@@ -34,7 +34,6 @@ void app_main(void)
     while (1) {
         camera_fb_t *fb = esp_camera_fb_get();
         if (!fb) { vTaskDelay(1); continue; }
-        ESP_LOGI("CAM_DEBUG", "JPEG Size: %zu Bytes", fb->len);
 
         // AI 分支
         // if (uxQueueSpacesAvailable(CTX()->q_ai_inference) > 0) {

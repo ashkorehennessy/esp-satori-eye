@@ -28,3 +28,6 @@ managed_components/
 Thumbs.db
 *.swp
 *~
+
+# vscode
+.vscode/

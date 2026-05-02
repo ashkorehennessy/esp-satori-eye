@@ -105,37 +105,59 @@ static esp_err_t ota_update_handler(httpd_req_t *req)
 }
 
 static esp_err_t stream_handler(httpd_req_t *req) {
-    camera_fb_t *fb = NULL;
+    // 单客户端限制：如果已有连接，拒绝新请求
+    if (CTX()->flags.is_web_connected) {
+        httpd_resp_set_status(req, "503 Service Unavailable");
+        httpd_resp_sendstr(req, "Stream already in use by another client");
+        return ESP_FAIL;
+    }
+
     esp_err_t res = ESP_OK;
     char part_buf[64];
     CTX()->flags.is_web_connected = true;
 
+    // 预分配 JPEG 拷贝缓冲区（PSRAM），用于快速归还 camera fb
+    const size_t jpeg_buf_size = 64 * 1024; // 64KB，足够 240x240
+    uint8_t *jpeg_buf = heap_caps_malloc(jpeg_buf_size, MALLOC_CAP_SPIRAM);
+    if (!jpeg_buf) {
+        ESP_LOGE(TAG, "Failed to allocate JPEG copy buffer");
+        CTX()->flags.is_web_connected = false;
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
+
     res = httpd_resp_set_type(req, STREAM_CONTENT_TYPE);
-    if(res != ESP_OK) {
+    if (res != ESP_OK) {
+        heap_caps_free(jpeg_buf);
         CTX()->flags.is_web_connected = false;
         return res;
     }
 
-    while(true) {
+    while (true) {
+        camera_fb_t *fb = NULL;
         // 等待 app_main 投喂
         if (xQueueReceive(CTX()->q_camera_frame, &fb, pdMS_TO_TICKS(100)) == pdTRUE) {
+            // 立即拷贝 JPEG 数据并归还 fb，最小化 fb 占用时间
+            size_t jpeg_len = fb->len;
+            if (jpeg_len > jpeg_buf_size) jpeg_len = jpeg_buf_size;
+            memcpy(jpeg_buf, fb->buf, jpeg_len);
+            esp_camera_fb_return(fb);
+            fb = NULL;
+
+            // 用拷贝后的数据发送，此时 fb 已归还驱动池
             res = httpd_resp_send_chunk(req, STREAM_BOUNDARY, (ssize_t)strlen(STREAM_BOUNDARY));
             if (res == ESP_OK) {
-                size_t h_len = snprintf(part_buf, 64, STREAM_PART, fb->len);
+                size_t h_len = snprintf(part_buf, 64, STREAM_PART, (unsigned)jpeg_len);
                 res = httpd_resp_send_chunk(req, part_buf, (ssize_t)h_len);
             }
             if (res == ESP_OK) {
-                res = httpd_resp_send_chunk(req, (const char *)fb->buf, (ssize_t)fb->len);
+                res = httpd_resp_send_chunk(req, (const char *)jpeg_buf, (ssize_t)jpeg_len);
             }
-            esp_camera_fb_return(fb);
-            fb = NULL;
-        } else {
-            // 如果超时没收到帧，检查一下连接是否还需要维持
-            // 这里可以发送空包保活，或者不做处理直接继续等
         }
-        if(res != ESP_OK) break;
+        if (res != ESP_OK) break;
     }
 
+    heap_caps_free(jpeg_buf);
     CTX()->flags.is_web_connected = false;
     return res;
 }
