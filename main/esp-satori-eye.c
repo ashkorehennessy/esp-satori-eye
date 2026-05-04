@@ -38,7 +38,7 @@ void app_main(void)
         if (!fb) { vTaskDelay(1); continue; }
 
         // AI 分支：将 JPEG 解码到 Ping-Pong Buffer，送入 AI 推理队列
-        if (uxQueueSpacesAvailable(CTX()->q_ai_inference) > 0) {
+        if (CTX()->flags.ai_enabled && uxQueueSpacesAvailable(CTX()->q_ai_inference) > 0) {
             uint8_t *target_buf = CTX()->ai.buf_selector == 0 ? CTX()->ai.buf_a : CTX()->ai.buf_b;
             ai_decode_jpeg_wrapper(fb->buf, fb->len, target_buf);
             xQueueSend(CTX()->q_ai_inference, &target_buf, 0);

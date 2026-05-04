@@ -231,6 +231,46 @@ static esp_err_t detections_handler(httpd_req_t *req) {
     return httpd_resp_sendstr(req, resp);
 }
 
+// === 抓拍 API ===
+// GET /api/snapshot → 返回当前 JPEG 帧，触发浏览器下载
+static esp_err_t snapshot_handler(httpd_req_t *req) {
+    camera_fb_t *fb = esp_camera_fb_get();
+    if (!fb) {
+        ESP_LOGE(TAG, "Snapshot: camera capture failed");
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
+
+    httpd_resp_set_type(req, "image/jpeg");
+    httpd_resp_set_hdr(req, "Content-Disposition", "attachment; filename=snapshot.jpg");
+    esp_err_t res = httpd_resp_send(req, (const char *)fb->buf, fb->len);
+    esp_camera_fb_return(fb);
+    return res;
+}
+
+// === AI 开关 API ===
+// POST /api/ai  body: {"enabled":true}
+static esp_err_t ai_toggle_handler(httpd_req_t *req) {
+    char buf[64] = {0};
+    int len = httpd_req_recv(req, buf, sizeof(buf) - 1);
+    if (len <= 0) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty body");
+        return ESP_FAIL;
+    }
+
+    bool enabled = (strstr(buf, "true") != NULL);
+    CTX()->flags.ai_enabled = enabled;
+
+    // 关闭时立即清空检测结果，避免前端显示残留框
+    if (!enabled) {
+        CTX()->detections.count = 0;
+    }
+
+    ESP_LOGI(TAG, "AI inference %s", enabled ? "ON" : "OFF");
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_sendstr(req, enabled ? "{\"enabled\":true}" : "{\"enabled\":false}");
+}
+
 esp_err_t start_webserver(void) {
     // === Server 1: 主页 + API（端口 80）===
     // 这些 handler 都是短请求，不会阻塞 httpd 线程
@@ -272,6 +312,20 @@ esp_err_t start_webserver(void) {
             .user_ctx  = NULL
         };
         httpd_register_uri_handler(server, &det_uri);
+        httpd_uri_t snap_uri = {
+            .uri       = "/api/snapshot",
+            .method    = HTTP_GET,
+            .handler   = snapshot_handler,
+            .user_ctx  = NULL
+        };
+        httpd_register_uri_handler(server, &snap_uri);
+        httpd_uri_t ai_uri = {
+            .uri       = "/api/ai",
+            .method    = HTTP_POST,
+            .handler   = ai_toggle_handler,
+            .user_ctx  = NULL
+        };
+        httpd_register_uri_handler(server, &ai_uri);
     } else {
         ESP_LOGE(TAG, "Error starting API server!");
         return ESP_FAIL;

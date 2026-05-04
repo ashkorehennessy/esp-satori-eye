@@ -9,6 +9,7 @@
 typedef struct {
     volatile bool is_web_connected;
     volatile bool is_bench_running;
+    volatile bool ai_enabled;      // AI 推理开关（Web UI 可控）
 } sys_flags_t;
 
 typedef struct {

@@ -285,7 +285,7 @@
                     <div class="switch-item">
                         <span class="switch-label">启用 AI 推理</span>
                         <label class="toggle-switch">
-                            <input type="checkbox" id="aiToggle" onchange="toggleAI(this)">
+                            <input type="checkbox" id="aiToggle" checked onchange="toggleAI(this)">
                             <span class="slider"></span>
                         </label>
                     </div>
@@ -516,8 +516,29 @@
                 xhr.send(file);
             }, 500); // 延迟 500ms 发送
         }
-        function toggleAI(checkbox) { console.log("AI State:", checkbox.checked); }
-        function snapshot() { console.log("Snapshot click"); }
+        function toggleAI(checkbox) {
+            var enabled = checkbox.checked;
+            fetch('/api/ai', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({enabled: enabled})
+            }).catch(function() {});
+            // 关闭 AI 时停止轮询检测，开启时恢复
+            if (enabled) { startDetectionPolling(); }
+            else { stopDetectionPolling(); }
+        }
+        function snapshot() {
+            // 毫秒级时间戳，连拍也不会重名
+            var ts = Date.now();
+            fetch('/api/snapshot').then(function(r) { return r.blob(); }).then(function(blob) {
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = 'satori_' + ts + '.jpg';
+                a.click();
+                URL.revokeObjectURL(url);
+            }).catch(function() { alert('抓拍失败'); });
+        }
         function switchModel() { console.log("Switch model click"); }
     </script>
 </body>

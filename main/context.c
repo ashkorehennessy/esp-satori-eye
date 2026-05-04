@@ -18,6 +18,7 @@ void context_init(void) {
 
     g_app_ctx.flags.is_web_connected = false;
     g_app_ctx.flags.is_bench_running = true;
+    g_app_ctx.flags.ai_enabled = true;
 
     // 舵机初始位置：居中
     g_app_ctx.servo.x = 90;
