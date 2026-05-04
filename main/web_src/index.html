@@ -147,6 +147,12 @@
             background-size: 20px 20px;
             border-radius: 16px;
             padding-right: 40px;
+            position: relative;
+        }
+
+        .camera-container {
+            position: relative;
+            display: inline-block;
         }
 
         #stream {
@@ -156,6 +162,13 @@
             image-rendering: pixelated;
             transition: width 0.1s;
             border: 4px solid #FFF;
+            display: block;
+        }
+
+        #detectionCanvas {
+            position: absolute;
+            top: 4px; left: 4px;  /* 对齐 border */
+            pointer-events: none;
         }
 
         /* === 底部控制面板 === */
@@ -200,6 +213,36 @@
             background: rgba(252, 238, 245, 0.95); border-radius: 24px; display: none;
             flex-direction: column; justify-content: center; align-items: center; z-index: 10;
         }
+
+        /* === 舵机调试面板 === */
+        .servo-panel { display: none; width: 100%; }
+        .servo-panel.active { display: block; }
+        .preview-panel.active { display: flex; }
+        .preview-panel { display: none; }
+
+        .servo-slider-group {
+            display: flex; flex-direction: column; gap: 14px; width: 100%;
+        }
+        .servo-slider-item {
+            display: flex; align-items: center; gap: 12px;
+        }
+        .servo-slider-item label {
+            font-size: 13px; font-weight: 700; color: var(--accent-color);
+            min-width: 55px; text-align: right;
+        }
+        .servo-slider-item input[type=range] {
+            -webkit-appearance: none; flex: 1; height: 6px;
+            background: rgba(109,80,99,0.2); border-radius: 3px; outline: none;
+        }
+        .servo-slider-item input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%;
+            background: var(--accent-color); cursor: pointer;
+            box-shadow: 0 2px 6px rgba(109,80,99,0.4);
+        }
+        .servo-slider-item .servo-val {
+            font-size: 13px; font-weight: 600; color: var(--text-main);
+            min-width: 36px; text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -208,7 +251,8 @@
         <div class="brand"><span>👁️</span> SATORI DEVICE</div>
         <div class="menu-group">
             <div class="menu-title">设置</div>
-            <div class="menu-item active">📷 实时预览</div>
+            <div class="menu-item active" data-panel="preview" onclick="switchPanel('preview', this)">📷 实时预览</div>
+            <div class="menu-item" data-panel="servo" onclick="switchPanel('servo', this)">🎯 调试位置</div>
             <div class="menu-item">🧠 模型配置</div>
             <div class="menu-item">⚙️ 系统选项</div>
         </div>
@@ -229,10 +273,14 @@
             </div>
 
             <div class="camera-frame-wrapper">
-                <img id="stream" src="/stream" alt="Stream Loading...">
+                <div class="camera-container" id="cameraContainer">
+                    <img id="stream" src="" alt="Stream Loading...">
+                    <canvas id="detectionCanvas"></canvas>
+                </div>
             </div>
 
-            <div class="control-panel">
+            <!-- 实时预览控制面板 -->
+            <div class="control-panel preview-panel active" id="previewPanel">
                 <div class="switch-group">
                     <div class="switch-item">
                         <span class="switch-label">启用 AI 推理</span>
@@ -263,6 +311,27 @@
                 </div>
             </div>
 
+            <!-- 舵机调试控制面板 -->
+            <div class="control-panel servo-panel" id="servoPanel">
+                <div class="servo-slider-group">
+                    <div class="servo-slider-item">
+                        <label>X 轴</label>
+                        <input type="range" min="0" max="180" value="90" id="servoX" oninput="onServoChange()">
+                        <span class="servo-val" id="servoXVal">90°</span>
+                    </div>
+                    <div class="servo-slider-item">
+                        <label>Y 轴</label>
+                        <input type="range" min="0" max="180" value="90" id="servoY" oninput="onServoChange()">
+                        <span class="servo-val" id="servoYVal">90°</span>
+                    </div>
+                    <div class="servo-slider-item">
+                        <label>眼皮</label>
+                        <input type="range" min="0" max="180" value="90" id="servoEyelid" oninput="onServoChange()">
+                        <span class="servo-val" id="servoEyelidVal">90°</span>
+                    </div>
+                </div>
+            </div>
+
             <div id="ota-status" class="ota-overlay">
                 <h3 style="color: var(--accent-color);">Firmware Updating... <span id="progress-text">0%</span></h3>
                 <div style="width: 300px; height: 8px; background: #ddd; border-radius: 4px; overflow: hidden; margin-top: 10px;">
@@ -275,27 +344,142 @@
     </div>
 
     <script>
-        function updateZoom(val) {
-            const img = document.getElementById('stream');
-            const newWidth = 240 * (val / 100);
-            img.style.width = newWidth + 'px';
-            document.getElementById('zoomValue').innerText = val + '%';
+        // === 面板切换 ===
+        function switchPanel(panel, menuEl) {
+            // 高亮菜单
+            document.querySelectorAll('.menu-item').forEach(function(el) { el.classList.remove('active'); });
+            menuEl.classList.add('active');
+
+            // 切换面板
+            document.getElementById('previewPanel').classList.toggle('active', panel === 'preview');
+            document.getElementById('servoPanel').classList.toggle('active', panel === 'servo');
         }
 
+        // === 缩放 ===
+        function updateZoom(val) {
+            var img = document.getElementById('stream');
+            var newWidth = 240 * (val / 100);
+            img.style.width = newWidth + 'px';
+            document.getElementById('zoomValue').innerText = val + '%';
+            syncCanvasSize();
+        }
+
+        // === Canvas 尺寸同步 ===
+        function syncCanvasSize() {
+            var img = document.getElementById('stream');
+            var canvas = document.getElementById('detectionCanvas');
+            canvas.width = img.clientWidth;
+            canvas.height = img.clientHeight;
+        }
+
+        // === 舵机控制 ===
+        var servoTimer = null;
+        function onServoChange() {
+            var x = document.getElementById('servoX').value;
+            var y = document.getElementById('servoY').value;
+            var e = document.getElementById('servoEyelid').value;
+            document.getElementById('servoXVal').innerText = x + '°';
+            document.getElementById('servoYVal').innerText = y + '°';
+            document.getElementById('servoEyelidVal').innerText = e + '°';
+
+            // 节流：最多每 100ms 发一次请求
+            if (servoTimer) return;
+            servoTimer = setTimeout(function() {
+                servoTimer = null;
+                fetch('/api/servo', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({x: parseInt(x), y: parseInt(y), eyelid: parseInt(e)})
+                }).catch(function() {});
+            }, 100);
+        }
+
+        // === AI 检测框绘制 ===
+        var detectionPollTimer = null;
+        function startDetectionPolling() {
+            if (detectionPollTimer) return;
+            detectionPollTimer = setInterval(pollDetections, 200);
+        }
+        function stopDetectionPolling() {
+            if (detectionPollTimer) { clearInterval(detectionPollTimer); detectionPollTimer = null; }
+            // 清除画布
+            var canvas = document.getElementById('detectionCanvas');
+            var ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function pollDetections() {
+            fetch('/api/detections').then(function(r) { return r.json(); }).then(function(data) {
+                drawDetections(data.d || []);
+            }).catch(function() {});
+        }
+
+        function drawDetections(dets) {
+            var canvas = document.getElementById('detectionCanvas');
+            var ctx = canvas.getContext('2d');
+            syncCanvasSize();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (dets.length === 0) return;
+
+            // 计算缩放比例（模型坐标 240x240 → 画布实际像素）
+            var scaleX = canvas.width / 240;
+            var scaleY = canvas.height / 240;
+
+            ctx.strokeStyle = '#FF4081';
+            ctx.lineWidth = 2;
+            ctx.font = '12px sans-serif';
+            ctx.fillStyle = '#FF4081';
+
+            for (var i = 0; i < dets.length; i++) {
+                var d = dets[i];
+                var rx = d.x1 * scaleX;
+                var ry = d.y1 * scaleY;
+                var rw = (d.x2 - d.x1) * scaleX;
+                var rh = (d.y2 - d.y1) * scaleY;
+
+                // 半透明填充
+                ctx.fillStyle = 'rgba(255, 64, 129, 0.15)';
+                ctx.fillRect(rx, ry, rw, rh);
+
+                // 边框
+                ctx.strokeRect(rx, ry, rw, rh);
+
+                // 标签
+                var label = 'Cat ' + (d.s * 100).toFixed(0) + '%';
+                ctx.fillStyle = '#FF4081';
+                ctx.fillRect(rx, ry - 16, ctx.measureText(label).width + 8, 16);
+                ctx.fillStyle = '#FFF';
+                ctx.fillText(label, rx + 4, ry - 4);
+            }
+        }
+
+        // 页面加载后开始轮询检测结果
+        startDetectionPolling();
+
+        // 图片加载完成后同步 canvas 尺寸
+        document.getElementById('stream').addEventListener('load', syncCanvasSize);
+
+        // 推流在独立的 httpd 实例上，端口 81
+        var streamUrl = 'http://' + location.hostname + ':81/stream';
+        document.getElementById('stream').src = streamUrl;
+
+        // === OTA ===
         function startOTA() {
             var fileInput = document.getElementById('fw_file');
             var file = fileInput.files[0];
             if (!file) return;
             if(!confirm("确认刷入: " + file.name + " ?")) return;
 
-            // 强制把图片源置空，浏览器会立即断开 /stream 的 TCP 连接
+            // 强制把图片源置空，浏览器会立即断开端口 81 的 /stream TCP 连接
             // 这样服务端的 stream_handler 就会退出循环，释放线程
             document.getElementById('stream').src = "";
+            stopDetectionPolling();
 
             // 显示遮罩
             document.getElementById('ota-status').style.display = 'flex';
 
-            // 给服务端 500ms 的时间去处理“断开连接”的逻辑并退出循环
+            // 给服务端 500ms 的时间去处理"断开连接"的逻辑并退出循环
             setTimeout(function() {
                 var xhr = new XMLHttpRequest();
                 xhr.open("POST", "/update", true);

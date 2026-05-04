@@ -1,7 +1,9 @@
 #ifndef ESP_SATORI_EYE_CONTENT_H
 #define ESP_SATORI_EYE_CONTENT_H
 #include <stdbool.h>
+#include <stdint.h>
 #include "freertos/FreeRTOS.h"
+#include "esp_timer.h"
 
 // 系统状态标志位
 typedef struct {
@@ -15,10 +17,33 @@ typedef struct {
     int buf_selector;  // 当前正在写入哪个 Buffer
 } ai_runtime_t;
 
+// 舵机目标位置（Web UI → ESP32）
+typedef struct {
+    volatile int16_t x;       // 水平轴，0~180°
+    volatile int16_t y;       // 垂直轴，0~180°
+    volatile int16_t eyelid;  // 眼皮轴，0~180°
+} servo_target_t;
+
+// AI 检测结果（AI Task → Web UI）
+#define MAX_DETECTIONS 4
+typedef struct {
+    int x1, y1, x2, y2;  // 边界框像素坐标（240x240 空间）
+    int category;
+    float score;
+} detection_t;
+
+typedef struct {
+    detection_t items[MAX_DETECTIONS];
+    volatile int count;           // 当前检测到的目标数
+    volatile int64_t timestamp;   // 最近一次推理的时间戳 (us)
+} detection_results_t;
+
 // 核心上下文结构体
 typedef struct {
     sys_flags_t flags;
     ai_runtime_t ai;
+    servo_target_t servo;
+    detection_results_t detections;
 
     TaskHandle_t task_main;       // 主任务句柄
     TaskHandle_t task_ai;         // AI 任务句柄

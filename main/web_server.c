@@ -6,7 +6,10 @@
 #include "esp_ota_ops.h"
 #include "esp_partition.h"
 #include <sys/param.h>
+#include <stdlib.h>
+#include <string.h>
 #include "context.h"
+#include "servo.h"
 
 static const char *TAG = "web_server";
 extern const uint8_t index_html_gz_start[] asm("_binary_index_html_gz_start");
@@ -174,17 +177,73 @@ static esp_err_t index_handler(httpd_req_t *req) {
     return httpd_resp_send(req, (const char *)index_html_gz_start, index_len);
 }
 
+// === 舵机控制 API ===
+// POST /api/servo  body: {"x":90,"y":90,"eyelid":90}
+static esp_err_t servo_handler(httpd_req_t *req) {
+    char buf[128] = {0};
+    int len = httpd_req_recv(req, buf, sizeof(buf) - 1);
+    if (len <= 0) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty body");
+        return ESP_FAIL;
+    }
+
+    // 简易 JSON 解析：找 "x": "y": "eyelid": 后面的数字
+    int x = CTX()->servo.x, y = CTX()->servo.y, eyelid = CTX()->servo.eyelid;
+    char *p;
+
+    p = strstr(buf, "\"x\"");
+    if (p) { p += 3; while (*p && *p != ':') p++; if (*p) x = atoi(p + 1); }
+
+    p = strstr(buf, "\"y\"");
+    if (p) { p += 3; while (*p && *p != ':') p++; if (*p) y = atoi(p + 1); }
+
+    p = strstr(buf, "\"eyelid\"");
+    if (p) { p += 8; while (*p && *p != ':') p++; if (*p) eyelid = atoi(p + 1); }
+
+    servo_set((int16_t)x, (int16_t)y, (int16_t)eyelid);
+
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_sendstr(req, "{\"ok\":true}");
+}
+
+// === AI 检测结果 API ===
+// GET /api/detections → 返回最新检测框 JSON
+static esp_err_t detections_handler(httpd_req_t *req) {
+    // 紧凑 JSON：{"d":[{"x1":0,"y1":0,"x2":50,"y2":50,"c":0,"s":0.85}],"t":12345}
+    char resp[512];
+    int off = 0;
+
+    off += snprintf(resp + off, sizeof(resp) - off, "{\"d\":[");
+
+    int count = CTX()->detections.count;
+    for (int i = 0; i < count && i < MAX_DETECTIONS; i++) {
+        detection_t *d = &CTX()->detections.items[i];
+        if (i > 0) off += snprintf(resp + off, sizeof(resp) - off, ",");
+        off += snprintf(resp + off, sizeof(resp) - off,
+                        "{\"x1\":%d,\"y1\":%d,\"x2\":%d,\"y2\":%d,\"c\":%d,\"s\":%.2f}",
+                        d->x1, d->y1, d->x2, d->y2, d->category, d->score);
+    }
+
+    off += snprintf(resp + off, sizeof(resp) - off, "],\"t\":%lld}",
+                    CTX()->detections.timestamp);
+
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_sendstr(req, resp);
+}
+
 esp_err_t start_webserver(void) {
+    // === Server 1: 主页 + API（端口 80）===
+    // 这些 handler 都是短请求，不会阻塞 httpd 线程
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = 80;
     config.core_id = 0;
     config.stack_size = 8192;
+    config.max_uri_handlers = 8;
 
     httpd_handle_t server = NULL;
 
-    ESP_LOGI(TAG, "Starting web server on port: '%d'", config.server_port);
+    ESP_LOGI(TAG, "Starting API server on port 80");
     if (httpd_start(&server, &config) == ESP_OK) {
-        // 注册主页
         httpd_uri_t index_uri = {
             .uri       = "/",
             .method    = HTTP_GET,
@@ -192,15 +251,6 @@ esp_err_t start_webserver(void) {
             .user_ctx  = NULL
         };
         httpd_register_uri_handler(server, &index_uri);
-        // 注册流媒体
-        httpd_uri_t stream_uri = {
-            .uri       = "/stream",
-            .method    = HTTP_GET,
-            .handler   = stream_handler,
-            .user_ctx  = NULL
-        };
-        httpd_register_uri_handler(server, &stream_uri);
-        // 注册 OTA 更新接口
         httpd_uri_t ota_uri = {
             .uri       = "/update",
             .method    = HTTP_POST,
@@ -208,10 +258,50 @@ esp_err_t start_webserver(void) {
             .user_ctx  = NULL
         };
         httpd_register_uri_handler(server, &ota_uri);
-
-        return ESP_OK;
+        httpd_uri_t servo_uri = {
+            .uri       = "/api/servo",
+            .method    = HTTP_POST,
+            .handler   = servo_handler,
+            .user_ctx  = NULL
+        };
+        httpd_register_uri_handler(server, &servo_uri);
+        httpd_uri_t det_uri = {
+            .uri       = "/api/detections",
+            .method    = HTTP_GET,
+            .handler   = detections_handler,
+            .user_ctx  = NULL
+        };
+        httpd_register_uri_handler(server, &det_uri);
+    } else {
+        ESP_LOGE(TAG, "Error starting API server!");
+        return ESP_FAIL;
     }
 
-    ESP_LOGE(TAG, "Error starting server!");
-    return ESP_FAIL;
+    // === Server 2: MJPEG 推流（端口 81）===
+    // stream_handler 是无限循环，会独占 httpd 线程，
+    // 所以必须用独立的 httpd 实例，否则会阻塞所有 API 请求
+    httpd_config_t stream_config = HTTPD_DEFAULT_CONFIG();
+    stream_config.server_port = 81;
+    stream_config.ctrl_port = 32769;  // 控制端口不能和 server 1 冲突
+    stream_config.core_id = 0;
+    stream_config.stack_size = 8192;
+    stream_config.max_uri_handlers = 2;
+
+    httpd_handle_t stream_server = NULL;
+
+    ESP_LOGI(TAG, "Starting stream server on port 81");
+    if (httpd_start(&stream_server, &stream_config) == ESP_OK) {
+        httpd_uri_t stream_uri = {
+            .uri       = "/stream",
+            .method    = HTTP_GET,
+            .handler   = stream_handler,
+            .user_ctx  = NULL
+        };
+        httpd_register_uri_handler(stream_server, &stream_uri);
+    } else {
+        ESP_LOGE(TAG, "Error starting stream server!");
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
 }

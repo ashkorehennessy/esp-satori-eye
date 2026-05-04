@@ -11,6 +11,7 @@
 #include "wifi.h"
 #include "web_server.h"
 #include "ai.h"
+#include "servo.h"
 #define TAG "app_main"
 void start_benchmark(void);
 void app_main(void)
@@ -28,20 +29,21 @@ void app_main(void)
     }
     wifi_init_softap();
     start_webserver();
-    // start_ai();
+    servo_init();
+    start_ai();
     start_benchmark();
-    ESP_LOGI(TAG, "System Ready! Connect to WiFi 'Satori-Eye' and visit http://192.168.4.1/stream");
+    ESP_LOGI(TAG, "System Ready! Connect to WiFi 'Satori-Eye' and visit http://192.168.4.1");
     while (1) {
         camera_fb_t *fb = esp_camera_fb_get();
         if (!fb) { vTaskDelay(1); continue; }
 
-        // AI 分支
-        // if (uxQueueSpacesAvailable(CTX()->q_ai_inference) > 0) {
-        //     uint8_t *target_buf = CTX()->ai.buf_selector == 0 ? CTX()->ai.buf_a : CTX()->ai.buf_b;
-        //     ai_decode_jpeg_wrapper(fb->buf, fb->len, target_buf);
-        //     xQueueSend(CTX()->q_ai_inference, &target_buf, 0);
-        //     CTX()->ai.buf_selector = CTX()->ai.buf_selector;
-        // }
+        // AI 分支：将 JPEG 解码到 Ping-Pong Buffer，送入 AI 推理队列
+        if (uxQueueSpacesAvailable(CTX()->q_ai_inference) > 0) {
+            uint8_t *target_buf = CTX()->ai.buf_selector == 0 ? CTX()->ai.buf_a : CTX()->ai.buf_b;
+            ai_decode_jpeg_wrapper(fb->buf, fb->len, target_buf);
+            xQueueSend(CTX()->q_ai_inference, &target_buf, 0);
+            CTX()->ai.buf_selector = 1 - CTX()->ai.buf_selector;  // 切换 Ping-Pong
+        }
 
         // Web 分支
         bool frame_taken_by_web = false;

@@ -19,6 +19,15 @@ void context_init(void) {
     g_app_ctx.flags.is_web_connected = false;
     g_app_ctx.flags.is_bench_running = true;
 
+    // 舵机初始位置：居中
+    g_app_ctx.servo.x = 90;
+    g_app_ctx.servo.y = 90;
+    g_app_ctx.servo.eyelid = 90;
+
+    // 检测结果清零
+    g_app_ctx.detections.count = 0;
+    g_app_ctx.detections.timestamp = 0;
+
     g_app_ctx.mutex = xSemaphoreCreateMutex();
 
     ESP_LOGI("CTX", "System Context Initialized");

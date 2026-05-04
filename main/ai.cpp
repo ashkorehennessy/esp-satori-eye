@@ -61,10 +61,25 @@ extern "C" void ai_inference_task(void *arg) {
             auto &detect_results = detect->run(img);
             int64_t end_time = esp_timer_get_time();
 
-            // 打印结果
+            // 将检测结果写入 context，供 Web UI 读取
+            int count = 0;
             for (const auto &res : detect_results) {
-                ESP_LOGI(TAG, "Det: Cat:%d Score:%.2f, time:%dms", res.category, res.score, end_time-start_time);
+                if (count >= MAX_DETECTIONS) break;
+                CTX()->detections.items[count].x1 = res.box[0];
+                CTX()->detections.items[count].y1 = res.box[1];
+                CTX()->detections.items[count].x2 = res.box[2];
+                CTX()->detections.items[count].y2 = res.box[3];
+                CTX()->detections.items[count].category = res.category;
+                CTX()->detections.items[count].score = res.score;
+                count++;
+                ESP_LOGI(TAG, "Det: Cat:%d Score:%.2f Box:[%d,%d,%d,%d] time:%dms",
+                         res.category, res.score,
+                         res.box[0], res.box[1], res.box[2], res.box[3],
+                         (int)((end_time - start_time) / 1000));
             }
+            // 先写完所有 items 再更新 count，避免读取端看到不一致的状态
+            CTX()->detections.count = count;
+            CTX()->detections.timestamp = end_time;
         }
         vTaskDelay(pdMS_TO_TICKS(1));
     }
