@@ -243,11 +243,109 @@
             font-size: 13px; font-weight: 600; color: var(--text-main);
             min-width: 36px; text-align: center;
         }
+
+        /* === 汉堡菜单按钮（仅手机可见）=== */
+        .hamburger {
+            display: none;
+            position: fixed; top: 14px; left: 14px; z-index: 1001;
+            background: var(--card-bg); border: 1px solid rgba(109,80,99,0.15);
+            border-radius: 10px; padding: 8px 10px; cursor: pointer;
+            font-size: 20px; line-height: 1; color: var(--accent-color);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        /* === 遮罩层（手机侧边栏打开时）=== */
+        .sidebar-overlay {
+            display: none;
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.3); z-index: 999;
+        }
+        .sidebar-overlay.active { display: block; }
+
+        /* === 手机竖屏响应式 === */
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+                height: auto;
+                min-height: 100vh;
+                overflow-y: auto;
+            }
+
+            /* 汉堡按钮显示 */
+            .hamburger { display: block; }
+
+            /* 侧边栏 → 滑出抽屉 */
+            .sidebar {
+                position: fixed; top: 0; left: -260px;
+                width: 260px; height: 100vh;
+                z-index: 1000;
+                transition: left 0.3s ease;
+                box-shadow: 4px 0 20px rgba(0,0,0,0.1);
+                padding-top: 60px;
+            }
+            .sidebar.open { left: 0; }
+
+            /* 主内容区 */
+            .main-content {
+                padding: 60px 12px 20px 12px;
+                justify-content: flex-start;
+            }
+
+            /* 卡片 */
+            .device-stage {
+                padding: 16px 14px;
+                border-radius: 16px;
+            }
+
+            /* 隐藏缩放滑条 */
+            .zoom-side-panel { display: none; }
+
+            /* 摄像头画面自适应 */
+            .camera-frame-wrapper {
+                height: auto;
+                padding-right: 0;
+                margin-bottom: 14px;
+                margin-top: 6px;
+            }
+            #stream {
+                width: 100% !important;  /* 覆盖 JS 设置的 zoom 宽度 */
+                max-width: 100%;
+            }
+
+            /* 控制面板竖排 */
+            .control-panel {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 16px;
+                padding-right: 0;
+            }
+
+            .switch-group {
+                justify-content: space-around;
+            }
+
+            .action-group {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .btn-pill-small {
+                flex: 1;
+                min-width: 0;
+                justify-content: center;
+                padding: 10px 12px;
+            }
+        }
     </style>
 </head>
 <body>
 
-    <div class="sidebar">
+    <!-- 手机端汉堡菜单按钮 -->
+    <div class="hamburger" onclick="toggleSidebar()">☰</div>
+    <!-- 手机端遮罩层 -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+    <div class="sidebar" id="sidebar">
         <div class="brand"><span>👁️</span> SATORI DEVICE</div>
         <div class="menu-group">
             <div class="menu-title">设置</div>
@@ -344,6 +442,12 @@
     </div>
 
     <script>
+        // === 手机端侧边栏 ===
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('open');
+            document.getElementById('sidebarOverlay').classList.toggle('active');
+        }
+
         // === 面板切换 ===
         function switchPanel(panel, menuEl) {
             // 高亮菜单
@@ -353,6 +457,9 @@
             // 切换面板
             document.getElementById('previewPanel').classList.toggle('active', panel === 'preview');
             document.getElementById('servoPanel').classList.toggle('active', panel === 'servo');
+
+            // 手机端：选完自动关闭抽屉
+            if (window.innerWidth <= 768) { toggleSidebar(); }
         }
 
         // === 缩放 ===

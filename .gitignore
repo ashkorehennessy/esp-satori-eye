@@ -16,12 +16,7 @@ sdkconfig.ci
 managed_components/
 
 # IDE (JetBrains / CLion)
-.idea/workspace.xml
-.idea/tasks.xml
-.idea/usage.statistics.xml
-.idea/dictionaries
-.idea/shelf
-.idea/httpRequests/
+.idea/
 
 # System & Misc
 .DS_Store
@@ -31,3 +26,6 @@ Thumbs.db
 
 # vscode
 .vscode/
+
+# clang
+.clangd
