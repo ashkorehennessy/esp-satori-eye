@@ -64,6 +64,9 @@ void app_main(void)
             esp_camera_fb_return(fb);
         }
 
+        // 快速追踪：每帧用预测位置跑 PID → 舵机（~30 FPS）
+        tracking_predict();
+
         // 喂狗
         vTaskDelay(pdMS_TO_TICKS(1));
     }
