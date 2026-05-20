@@ -82,8 +82,14 @@ extern "C" void ai_inference_task(void *arg) {
             CTX()->detections.count = count;
             CTX()->detections.timestamp = end_time;
 
-            // PID 追踪：检测完成后立即更新舵机
-            tracking_update();
+            // 双速率追踪：校正预测器 或 通知丢失
+            if (count > 0) {
+                float cx = (float)(CTX()->detections.items[0].x1 + CTX()->detections.items[0].x2) / 2.0f;
+                float cy = (float)(CTX()->detections.items[0].y1 + CTX()->detections.items[0].y2) / 2.0f;
+                tracking_correct(cx, cy);
+            } else {
+                tracking_target_lost();
+            }
         }
         vTaskDelay(pdMS_TO_TICKS(1));
     }

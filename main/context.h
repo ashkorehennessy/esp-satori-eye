@@ -14,9 +14,9 @@ typedef struct {
 } sys_flags_t;
 
 typedef struct {
-    uint8_t *buf_a;    // Ping Buffer
-    uint8_t *buf_b;    // Pong Buffer
-    int buf_selector;  // 当前正在写入哪个 Buffer
+    uint8_t *buf_a;         // Ping Buffer (RGB, AI_RGB_SIZE)
+    uint8_t *buf_b;         // Pong Buffer (RGB, AI_RGB_SIZE)
+    int buf_selector;       // 当前正在写入哪个 Buffer
 } ai_runtime_t;
 
 // 舵机目标位置（Web UI → ESP32）

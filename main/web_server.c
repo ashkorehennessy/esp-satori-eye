@@ -486,6 +486,7 @@ esp_err_t start_webserver(void) {
   config.core_id = 0;
   config.stack_size = 8192;
   config.max_uri_handlers = 12;
+  config.max_open_sockets = 4;
 
   httpd_handle_t server = NULL;
 
@@ -555,6 +556,7 @@ esp_err_t start_webserver(void) {
   stream_config.core_id = 0;
   stream_config.stack_size = 8192;
   stream_config.max_uri_handlers = 2;
+  stream_config.max_open_sockets = 2;
 
   httpd_handle_t stream_server = NULL;
 
