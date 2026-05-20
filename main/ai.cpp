@@ -72,7 +72,7 @@ extern "C" void ai_inference_task(void *arg) {
                 CTX()->detections.items[count].category = res.category;
                 CTX()->detections.items[count].score = res.score;
                 count++;
-                ESP_LOGI(TAG, "Det: Cat:%d Score:%.2f Box:[%d,%d,%d,%d] time:%dms",
+                ESP_LOGI(TAG, "Det: Face:%d Score:%.2f Box:[%d,%d,%d,%d] time:%dms",
                          res.category, res.score,
                          res.box[0], res.box[1], res.box[2], res.box[3],
                          (int)((end_time - start_time) / 1000));

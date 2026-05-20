@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -21,10 +22,14 @@
             --shadow-card: 0 8px 30px rgba(109, 80, 99, 0.08);
         }
 
-        * { box-sizing: border-box; user-select: none; }
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
 
         body {
-            margin: 0; padding: 0;
+            margin: 0;
+            padding: 0;
             font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
             background-color: var(--bg-color);
             color: var(--text-main);
@@ -42,37 +47,154 @@
             border-right: 1px solid #F5F5F5;
             background: #FAFAFA;
         }
+
         .brand {
-            font-size: 20px; font-weight: 800; color: var(--accent-color);
-            margin-bottom: 40px; display: flex; align-items: center; gap: 10px;
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--accent-color);
+            margin-bottom: 40px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
-        .menu-group { margin-bottom: 25px; }
-        .menu-title { font-size: 12px; color: var(--text-sub); margin-bottom: 10px; padding-left: 10px; font-weight: 600; }
+
+        .menu-group {
+            margin-bottom: 25px;
+        }
+
+        .menu-title {
+            font-size: 12px;
+            color: var(--text-sub);
+            margin-bottom: 10px;
+            padding-left: 10px;
+            font-weight: 600;
+        }
+
         .menu-item {
-            display: flex; align-items: center; padding: 12px 15px;
-            border-radius: 10px; color: var(--text-main); cursor: pointer;
-            transition: 0.2s; font-size: 14px; font-weight: 500;
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            border-radius: 10px;
+            color: var(--text-main);
+            cursor: pointer;
+            transition: 0.2s;
+            font-size: 14px;
+            font-weight: 500;
         }
-        .menu-item.active { background-color: #FFF0F6; color: #E91E63; font-weight: 600; }
-        .menu-item:hover:not(.active) { background-color: #F0F0F0; }
+
+        .menu-item.active {
+            background-color: #FFF0F6;
+            color: #E91E63;
+            font-weight: 600;
+        }
+
+        .menu-item:hover:not(.active) {
+            background-color: #F0F0F0;
+        }
 
         /* === 主内容区 === */
         .main-content {
-            flex: 1; padding: 30px 50px;
-            overflow-y: auto; display: flex; flex-direction: column; align-items: center;
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
             justify-content: center;
+            gap: 20px;
         }
 
         /* === 核心卡片 === */
         .device-stage {
             background-color: var(--card-bg);
-            width: 100%; max-width: 860px;
+            width: 100%;
+            max-width: 800px;
+            min-width: 380px;
             border-radius: 24px;
             padding: 30px 40px;
-            display: flex; flex-direction: column; align-items: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
             box-shadow: var(--shadow-card);
             position: relative;
             transition: all 0.3s ease;
+            flex-shrink: 0;
+        }
+
+        /* === 日志面板 === */
+        .log-panel {
+            flex: 1;
+            min-width: 260px;
+            max-width: 380px;
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: var(--shadow-card);
+            max-height: 680px;
+        }
+
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .log-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--accent-color);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .log-clear-btn {
+            background: rgba(109, 80, 99, 0.1);
+            border: none;
+            color: var(--accent-color);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .log-clear-btn:hover {
+            background: rgba(109, 80, 99, 0.2);
+        }
+
+        .log-body {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+            font-size: 11px;
+            line-height: 1.5;
+            color: var(--text-main);
+            white-space: pre-wrap;
+            word-break: break-all;
+            background: #FFF;
+            border-radius: 8px;
+            padding: 10px;
+            border: 1px solid rgba(109, 80, 99, 0.1);
+            scrollbar-width: thin;
+            scrollbar-color: #DDD #FFF;
+        }
+
+        .log-body::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .log-body::-webkit-scrollbar-track {
+            background: #FFF;
+        }
+
+        .log-body::-webkit-scrollbar-thumb {
+            background: #DDD;
+            border-radius: 3px;
         }
 
         /* === 垂直缩放滑条容器 === */
@@ -90,7 +212,8 @@
         }
 
         /* 文字样式 */
-        .zoom-label-top, .zoom-label-bottom {
+        .zoom-label-top,
+        .zoom-label-bottom {
             font-size: 12px;
             font-weight: 700;
             color: var(--accent-color);
@@ -101,16 +224,22 @@
         }
 
         /* 顶部文字给点下边距，防止贴着滑条 */
-        .zoom-label-top { margin-bottom: 10px; }
+        .zoom-label-top {
+            margin-bottom: 10px;
+        }
 
         /* 底部文字给点上边距 */
-        .zoom-label-bottom { margin-top: 10px; }
+        .zoom-label-bottom {
+            margin-top: 10px;
+        }
 
         /* 自定义垂直滑条 */
         input[type=range].vertical-range {
             -webkit-appearance: none;
-            width: 180px; /* 滑条物理长度 */
-            height: 6px;  /* 轨道粗细 */
+            width: 180px;
+            /* 滑条物理长度 */
+            height: 6px;
+            /* 轨道粗细 */
             background: transparent;
 
             /* 旋转 -90度 */
@@ -120,27 +249,37 @@
         }
 
         input[type=range].vertical-range::-webkit-slider-runnable-track {
-            width: 100%; height: 6px; cursor: pointer;
-            background: rgba(109, 80, 99, 0.2); border-radius: 3px;
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(109, 80, 99, 0.2);
+            border-radius: 3px;
         }
 
         input[type=range].vertical-range::-webkit-slider-thumb {
-            height: 18px; width: 18px; border-radius: 50%;
-            background: var(--accent-color); cursor: pointer;
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            cursor: pointer;
             -webkit-appearance: none;
             margin-top: -6px;
-            box-shadow: 0 2px 6px rgba(109,80,99,0.4);
+            box-shadow: 0 2px 6px rgba(109, 80, 99, 0.4);
             transition: transform 0.1s;
         }
 
-        input[type=range].vertical-range:active::-webkit-slider-thumb { transform: scale(1.2); }
+        input[type=range].vertical-range:active::-webkit-slider-thumb {
+            transform: scale(1.2);
+        }
 
 
         /* === 摄像头画面容器 === */
         .camera-frame-wrapper {
             width: 100%;
-            height: 480px;
-            display: flex; justify-content: center; align-items: center;
+            height: 580px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             margin-bottom: 20px;
             margin-top: 10px;
             background-image: radial-gradient(#6D506320 1px, transparent 1px);
@@ -158,7 +297,7 @@
         #stream {
             width: 240px;
             border-radius: 8px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
             image-rendering: pixelated;
             transition: width 0.1s;
             border: 4px solid #FFF;
@@ -167,100 +306,232 @@
 
         #detectionCanvas {
             position: absolute;
-            top: 4px; left: 4px;  /* 对齐 border */
+            top: 4px;
+            left: 4px;
+            /* 对齐 border */
             pointer-events: none;
         }
 
         /* === 底部控制面板 === */
         .control-panel {
             width: 100%;
-            display: flex; justify-content: space-between; align-items: flex-end;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
             padding-top: 20px;
             padding-right: 40px;
-            border-top: 2px dashed rgba(109,80,99,0.1);
+            border-top: 2px dashed rgba(109, 80, 99, 0.1);
         }
 
-        .switch-group { display: flex; gap: 30px; }
-        .switch-item { display: flex; flex-direction: column; gap: 8px; }
-        .switch-label { font-size: 12px; color: var(--accent-color); font-weight: 700; }
+        .switch-group {
+            display: flex;
+            gap: 30px;
+        }
 
-        .toggle-switch { position: relative; display: inline-block; width: 50px; height: 26px; }
-        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .switch-item {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .switch-label {
+            font-size: 12px;
+            color: var(--accent-color);
+            font-weight: 700;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 26px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
         .slider {
-            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
-            background-color: var(--switch-off); transition: .3s; border-radius: 26px;
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--switch-off);
+            transition: .3s;
+            border-radius: 26px;
         }
-        .slider:before {
-            position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px;
-            background-color: white; transition: .3s; border-radius: 50%;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
-        input:checked + .slider { background-color: var(--accent-color); }
-        input:checked + .slider:before { transform: translateX(24px); }
 
-        .action-group { display: flex; gap: 12px; }
-        .btn-pill-small {
-            background-color: #FFF; border: 1px solid rgba(109,80,99,0.15); color: var(--accent-color);
-            padding: 8px 20px; border-radius: 20px; font-size: 13px; font-weight: 600;
-            cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.02); transition: all 0.2s;
-            display: flex; align-items: center; gap: 6px;
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
-        .btn-pill-small:hover { background-color: var(--accent-color); color: white; transform: translateY(-2px); box-shadow: 0 4px 10px rgba(109,80,99,0.2); }
-        .btn-pill-small:active { transform: translateY(0); }
+
+        input:checked+.slider {
+            background-color: var(--accent-color);
+        }
+
+        input:checked+.slider:before {
+            transform: translateX(24px);
+        }
+
+        .action-group {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn-pill-small {
+            background-color: #FFF;
+            border: 1px solid rgba(109, 80, 99, 0.15);
+            color: var(--accent-color);
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.02);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-pill-small:hover {
+            background-color: var(--accent-color);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(109, 80, 99, 0.2);
+        }
+
+        .btn-pill-small:active {
+            transform: translateY(0);
+        }
 
         .ota-overlay {
-            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(252, 238, 245, 0.95); border-radius: 24px; display: none;
-            flex-direction: column; justify-content: center; align-items: center; z-index: 10;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(252, 238, 245, 0.95);
+            border-radius: 24px;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
         }
 
         /* === 舵机调试面板 === */
-        .servo-panel { display: none; width: 100%; }
-        .servo-panel.active { display: block; }
-        .preview-panel.active { display: flex; }
-        .preview-panel { display: none; }
+        .servo-panel {
+            display: none;
+            width: 100%;
+        }
+
+        .servo-panel.active {
+            display: block;
+        }
+
+        .preview-panel.active {
+            display: flex;
+        }
+
+        .preview-panel {
+            display: none;
+        }
 
         .servo-slider-group {
-            display: flex; flex-direction: column; gap: 14px; width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            width: 100%;
         }
+
         .servo-slider-item {
-            display: flex; align-items: center; gap: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
+
         .servo-slider-item label {
-            font-size: 13px; font-weight: 700; color: var(--accent-color);
-            min-width: 55px; text-align: right;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--accent-color);
+            min-width: 55px;
+            text-align: right;
         }
+
         .servo-slider-item input[type=range] {
-            -webkit-appearance: none; flex: 1; height: 6px;
-            background: rgba(109,80,99,0.2); border-radius: 3px; outline: none;
+            -webkit-appearance: none;
+            flex: 1;
+            height: 6px;
+            background: rgba(109, 80, 99, 0.2);
+            border-radius: 3px;
+            outline: none;
         }
+
         .servo-slider-item input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%;
-            background: var(--accent-color); cursor: pointer;
-            box-shadow: 0 2px 6px rgba(109,80,99,0.4);
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(109, 80, 99, 0.4);
         }
+
         .servo-slider-item .servo-val {
-            font-size: 13px; font-weight: 600; color: var(--text-main);
-            min-width: 36px; text-align: center;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-main);
+            min-width: 36px;
+            text-align: center;
         }
 
         /* === 汉堡菜单按钮（仅手机可见）=== */
         .hamburger {
             display: none;
-            position: fixed; top: 14px; left: 14px; z-index: 1001;
-            background: var(--card-bg); border: 1px solid rgba(109,80,99,0.15);
-            border-radius: 10px; padding: 8px 10px; cursor: pointer;
-            font-size: 20px; line-height: 1; color: var(--accent-color);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            position: fixed;
+            top: 14px;
+            left: 14px;
+            z-index: 1001;
+            background: var(--card-bg);
+            border: 1px solid rgba(109, 80, 99, 0.15);
+            border-radius: 10px;
+            padding: 8px 10px;
+            cursor: pointer;
+            font-size: 20px;
+            line-height: 1;
+            color: var(--accent-color);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
         }
 
         /* === 遮罩层（手机侧边栏打开时）=== */
         .sidebar-overlay {
             display: none;
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.3); z-index: 999;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.3);
+            z-index: 999;
         }
-        .sidebar-overlay.active { display: block; }
+
+        .sidebar-overlay.active {
+            display: block;
+        }
 
         /* === 手机竖屏响应式 === */
         @media (max-width: 768px) {
@@ -272,33 +543,52 @@
             }
 
             /* 汉堡按钮显示 */
-            .hamburger { display: block; }
+            .hamburger {
+                display: block;
+            }
 
             /* 侧边栏 → 滑出抽屉 */
             .sidebar {
-                position: fixed; top: 0; left: -260px;
-                width: 260px; height: 100vh;
+                position: fixed;
+                top: 0;
+                left: -260px;
+                width: 260px;
+                height: 100vh;
                 z-index: 1000;
                 transition: left 0.3s ease;
-                box-shadow: 4px 0 20px rgba(0,0,0,0.1);
+                box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
                 padding-top: 60px;
             }
-            .sidebar.open { left: 0; }
+
+            .sidebar.open {
+                left: 0;
+            }
 
             /* 主内容区 */
             .main-content {
                 padding: 60px 12px 20px 12px;
-                justify-content: flex-start;
+                flex-direction: column;
+                align-items: stretch;
             }
 
             /* 卡片 */
             .device-stage {
                 padding: 16px 14px;
                 border-radius: 16px;
+                min-width: 0;
+                max-width: none;
+            }
+
+            /* 日志面板 */
+            .log-panel {
+                max-width: none;
+                max-height: 300px;
             }
 
             /* 隐藏缩放滑条 */
-            .zoom-side-panel { display: none; }
+            .zoom-side-panel {
+                display: none;
+            }
 
             /* 摄像头画面自适应 */
             .camera-frame-wrapper {
@@ -307,8 +597,10 @@
                 margin-bottom: 14px;
                 margin-top: 6px;
             }
+
             #stream {
-                width: 100% !important;  /* 覆盖 JS 设置的 zoom 宽度 */
+                width: 100% !important;
+                /* 覆盖 JS 设置的 zoom 宽度 */
                 max-width: 100%;
             }
 
@@ -338,6 +630,7 @@
         }
     </style>
 </head>
+
 <body>
 
     <!-- 手机端汉堡菜单按钮 -->
@@ -366,7 +659,8 @@
 
             <div class="zoom-side-panel">
                 <span class="zoom-label-top">ZOOM</span>
-                <input type="range" class="vertical-range" min="100" max="300" value="100" id="zoomSlider" oninput="updateZoom(this.value)">
+                <input type="range" class="vertical-range" min="100" max="300" value="100" id="zoomSlider"
+                    oninput="updateZoom(this.value)">
                 <span class="zoom-label-bottom" id="zoomValue">100%</span>
             </div>
 
@@ -432,12 +726,23 @@
 
             <div id="ota-status" class="ota-overlay">
                 <h3 style="color: var(--accent-color);">Firmware Updating... <span id="progress-text">0%</span></h3>
-                <div style="width: 300px; height: 8px; background: #ddd; border-radius: 4px; overflow: hidden; margin-top: 10px;">
-                    <div id="progress-bar" style="width: 0%; height: 100%; background: var(--accent-color); transition: width 0.2s;"></div>
+                <div
+                    style="width: 300px; height: 8px; background: #ddd; border-radius: 4px; overflow: hidden; margin-top: 10px;">
+                    <div id="progress-bar"
+                        style="width: 0%; height: 100%; background: var(--accent-color); transition: width 0.2s;"></div>
                 </div>
                 <p style="font-size: 12px; color: #888; margin-top: 10px;">如果太长时间卡住不动，请手动复位系统，进度条满时请勿断开电源</p>
             </div>
 
+        </div>
+
+        <!-- 日志面板 -->
+        <div class="log-panel">
+            <div class="log-header">
+                <span class="log-title">📟 ESP32 日志</span>
+                <button class="log-clear-btn" onclick="clearLogs()">Clear</button>
+            </div>
+            <div class="log-body" id="logBody"></div>
         </div>
     </div>
 
@@ -451,7 +756,7 @@
         // === 面板切换 ===
         function switchPanel(panel, menuEl) {
             // 高亮菜单
-            document.querySelectorAll('.menu-item').forEach(function(el) { el.classList.remove('active'); });
+            document.querySelectorAll('.menu-item').forEach(function (el) { el.classList.remove('active'); });
             menuEl.classList.add('active');
 
             // 切换面板
@@ -460,6 +765,35 @@
 
             // 手机端：选完自动关闭抽屉
             if (window.innerWidth <= 768) { toggleSidebar(); }
+        }
+
+        // === 日志轮询 ===
+        var logPos = 0;
+        var logAutoScroll = true;
+        function pollLogs() {
+            fetch('/api/logs?pos=' + logPos).then(function (r) { return r.json(); }).then(function (data) {
+                if (data.d && data.d.length > 0) {
+                    var el = document.getElementById('logBody');
+                    el.textContent += data.d;
+                    // 限制文本长度，防止内存爆炸
+                    if (el.textContent.length > 50000) {
+                        el.textContent = el.textContent.slice(-30000);
+                    }
+                    if (logAutoScroll) {
+                        el.scrollTop = el.scrollHeight;
+                    }
+                }
+                logPos = data.pos;
+            }).catch(function () { });
+        }
+        setInterval(pollLogs, 1000);
+        // 用户手动滚动时停止自动滚动，滚到底部恢复
+        document.getElementById('logBody').addEventListener('scroll', function () {
+            var el = this;
+            logAutoScroll = (el.scrollHeight - el.scrollTop - el.clientHeight < 30);
+        });
+        function clearLogs() {
+            document.getElementById('logBody').textContent = '';
         }
 
         // === 缩放 ===
@@ -491,15 +825,18 @@
 
             // 节流：最多每 100ms 发一次请求
             if (servoTimer) return;
-            servoTimer = setTimeout(function() {
+            servoTimer = setTimeout(function () {
                 servoTimer = null;
                 fetch('/api/servo', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({x: parseInt(x), y: parseInt(y), eyelid: parseInt(e)})
-                }).catch(function() {});
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ x: parseInt(x), y: parseInt(y), eyelid: parseInt(e) })
+                }).catch(function () { });
             }, 100);
         }
+
+        // === 推流 FPS 监测（由服务端统计，通过 detections API 获取）===
+        var fpsDisplay = 0;
 
         // === AI 检测框绘制 ===
         var detectionPollTimer = null;
@@ -516,9 +853,10 @@
         }
 
         function pollDetections() {
-            fetch('/api/detections').then(function(r) { return r.json(); }).then(function(data) {
+            fetch('/api/detections').then(function (r) { return r.json(); }).then(function (data) {
+                fpsDisplay = Math.round(data.fps || 0);
                 drawDetections(data.d || []);
-            }).catch(function() {});
+            }).catch(function () { });
         }
 
         function drawDetections(dets) {
@@ -526,6 +864,18 @@
             var ctx = canvas.getContext('2d');
             syncCanvasSize();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 始终绘制 FPS（绿色，左上角，大小随缩放等比）
+            var fpsSize = Math.round(14 * (canvas.width / 240));
+            ctx.font = 'bold ' + fpsSize + 'px monospace';
+            var fpsText = fpsDisplay + ' FPS';
+            var fpsX = 6 * (canvas.width / 240);
+            var fpsY = fpsSize + 4 * (canvas.width / 240);
+            var tw = ctx.measureText(fpsText).width;
+            ctx.fillStyle = 'rgba(0,0,0,0.45)';
+            ctx.fillRect(fpsX - 2, fpsY - fpsSize, tw + 6, fpsSize + 4);
+            ctx.fillStyle = '#00FF66';
+            ctx.fillText(fpsText, fpsX, fpsY - 2);
 
             if (dets.length === 0) return;
 
@@ -553,7 +903,7 @@
                 ctx.strokeRect(rx, ry, rw, rh);
 
                 // 标签
-                var label = 'Cat ' + (d.s * 100).toFixed(0) + '%';
+                var label = 'Face ' + (d.s * 100).toFixed(0) + '%';
                 ctx.fillStyle = '#FF4081';
                 ctx.fillRect(rx, ry - 16, ctx.measureText(label).width + 8, 16);
                 ctx.fillStyle = '#FFF';
@@ -584,7 +934,7 @@
             var fileInput = document.getElementById('fw_file');
             var file = fileInput.files[0];
             if (!file) return;
-            if(!confirm("确认刷入: " + file.name + " ?")) return;
+            if (!confirm("确认刷入: " + file.name + " ?")) return;
 
             // 强制把图片源置空，浏览器会立即断开端口 81 的 /stream TCP 连接
             // 这样服务端的 stream_handler 就会退出循环，释放线程
@@ -595,14 +945,14 @@
             document.getElementById('ota-status').style.display = 'flex';
 
             // 给服务端 500ms 的时间去处理"断开连接"的逻辑并退出循环
-            setTimeout(function() {
+            setTimeout(function () {
                 var xhr = new XMLHttpRequest();
                 xhr.open("POST", "/update", true);
 
                 // 增加超时设置，防止永久卡死
                 xhr.timeout = 60000; // 60秒超时
 
-                xhr.upload.onprogress = function(e) {
+                xhr.upload.onprogress = function (e) {
                     if (e.lengthComputable) {
                         var percent = (e.loaded / e.total) * 100;
                         document.getElementById('progress-bar').style.width = percent + "%";
@@ -610,7 +960,7 @@
                     }
                 };
 
-                xhr.onload = function() {
+                xhr.onload = function () {
                     if (xhr.status == 200) {
                         alert("升级成功！正在重启...");
                         location.reload();
@@ -622,7 +972,7 @@
                     }
                 };
 
-                xhr.onerror = function() {
+                xhr.onerror = function () {
                     alert("网络错误，OTA中断");
                     document.getElementById('ota-status').style.display = 'none';
                     location.reload();
@@ -635,26 +985,30 @@
             var enabled = checkbox.checked;
             fetch('/api/ai', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({enabled: enabled})
-            }).catch(function() {});
-            // 关闭 AI 时停止轮询检测，开启时恢复
-            if (enabled) { startDetectionPolling(); }
-            else { stopDetectionPolling(); }
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            }).catch(function () { });
+            // 关闭 AI 时清空检测框（但保持轮询以更新 FPS）
+            if (!enabled) {
+                var canvas = document.getElementById('detectionCanvas');
+                var ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
         }
         function snapshot() {
             // 毫秒级时间戳，连拍也不会重名
             var ts = Date.now();
-            fetch('/api/snapshot').then(function(r) { return r.blob(); }).then(function(blob) {
+            fetch('/api/snapshot').then(function (r) { return r.blob(); }).then(function (blob) {
                 var url = URL.createObjectURL(blob);
                 var a = document.createElement('a');
                 a.href = url;
                 a.download = 'satori_' + ts + '.jpg';
                 a.click();
                 URL.revokeObjectURL(url);
-            }).catch(function() { alert('抓拍失败'); });
+            }).catch(function () { alert('抓拍失败'); });
         }
         function switchModel() { console.log("Switch model click"); }
     </script>
 </body>
+
 </html>
