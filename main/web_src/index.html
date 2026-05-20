@@ -499,6 +499,76 @@
             text-align: center;
         }
 
+        /* === 参数调节面板 === */
+        .params-panel {
+            display: none;
+            width: 100%;
+        }
+
+        .params-panel.active {
+            display: block;
+        }
+
+        .param-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .param-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .param-item label {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--accent-color);
+        }
+
+        .param-item input[type=number] {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid rgba(109, 80, 99, 0.2);
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-main);
+            background: #FFF;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .param-item input[type=number]:focus {
+            border-color: var(--accent-color);
+        }
+
+        .param-apply-btn {
+            margin-top: 16px;
+            width: 100%;
+            padding: 10px;
+            background: var(--accent-color);
+            color: #FFF;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .param-apply-btn:hover {
+            opacity: 0.85;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(109, 80, 99, 0.3);
+        }
+
+        .param-apply-btn:active {
+            transform: translateY(0);
+        }
+
         /* === 汉堡菜单按钮（仅手机可见）=== */
         .hamburger {
             display: none;
@@ -645,7 +715,7 @@
             <div class="menu-item active" data-panel="preview" onclick="switchPanel('preview', this)">📷 实时预览</div>
             <div class="menu-item" data-panel="servo" onclick="switchPanel('servo', this)">🎯 调试位置</div>
             <div class="menu-item">🧠 模型配置</div>
-            <div class="menu-item">⚙️ 系统选项</div>
+            <div class="menu-item" data-panel="params" onclick="switchPanel('params', this)">⚙️ 参数调节</div>
         </div>
         <div class="menu-group">
             <div class="menu-title">资源</div>
@@ -688,6 +758,13 @@
                             <span class="slider"></span>
                         </label>
                     </div>
+                    <div class="switch-item">
+                        <span class="switch-label">自动追踪</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="trackingToggle" onchange="toggleTracking(this)">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
                 </div>
 
                 <div class="action-group">
@@ -722,6 +799,29 @@
                         <span class="servo-val" id="servoEyelidVal">90°</span>
                     </div>
                 </div>
+            </div>
+
+            <!-- 参数调节面板 -->
+            <div class="control-panel params-panel" id="paramsPanel">
+                <div class="param-grid">
+                    <div class="param-item">
+                        <label>Kp</label>
+                        <input type="number" id="paramKp" step="0.01" value="0">
+                    </div>
+                    <div class="param-item">
+                        <label>Ki</label>
+                        <input type="number" id="paramKi" step="0.01" value="0">
+                    </div>
+                    <div class="param-item">
+                        <label>Kd</label>
+                        <input type="number" id="paramKd" step="0.01" value="0">
+                    </div>
+                    <div class="param-item">
+                        <label>最大增量 (°)</label>
+                        <input type="number" id="paramMaxInc" step="1" value="10">
+                    </div>
+                </div>
+                <button class="param-apply-btn" onclick="applyParams()">✅ 应用参数</button>
             </div>
 
             <div id="ota-status" class="ota-overlay">
@@ -762,6 +862,10 @@
             // 切换面板
             document.getElementById('previewPanel').classList.toggle('active', panel === 'preview');
             document.getElementById('servoPanel').classList.toggle('active', panel === 'servo');
+            document.getElementById('paramsPanel').classList.toggle('active', panel === 'params');
+
+            // 切到参数面板时加载当前值
+            if (panel === 'params') { loadParams(); }
 
             // 手机端：选完自动关闭抽屉
             if (window.innerWidth <= 768) { toggleSidebar(); }
@@ -988,12 +1092,21 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ enabled: enabled })
             }).catch(function () { });
-            // 关闭 AI 时清空检测框（但保持轮询以更新 FPS）
+            // 关闭 AI 时清空检测框 + 强制关闭追踪
             if (!enabled) {
+                document.getElementById('trackingToggle').checked = false;
                 var canvas = document.getElementById('detectionCanvas');
                 var ctx = canvas.getContext('2d');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
             }
+        }
+        function toggleTracking(checkbox) {
+            var enabled = checkbox.checked;
+            fetch('/api/tracking', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            }).catch(function () { });
         }
         function snapshot() {
             // 毫秒级时间戳，连拍也不会重名
@@ -1008,6 +1121,35 @@
             }).catch(function () { alert('抓拍失败'); });
         }
         function switchModel() { console.log("Switch model click"); }
+
+        // === PID 参数调节 ===
+        function loadParams() {
+            fetch('/api/pid_params').then(function (r) { return r.json(); }).then(function (data) {
+                document.getElementById('paramKp').value = data.kp;
+                document.getElementById('paramKi').value = data.ki;
+                document.getElementById('paramKd').value = data.kd;
+                document.getElementById('paramMaxInc').value = data.max_inc;
+            }).catch(function () { });
+        }
+        function applyParams() {
+            var params = {
+                kp: parseFloat(document.getElementById('paramKp').value),
+                ki: parseFloat(document.getElementById('paramKi').value),
+                kd: parseFloat(document.getElementById('paramKd').value),
+                max_inc: parseFloat(document.getElementById('paramMaxInc').value)
+            };
+            fetch('/api/pid_params', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(params)
+            }).then(function (r) { return r.json(); }).then(function (data) {
+                if (data.ok) {
+                    var btn = document.querySelector('.param-apply-btn');
+                    btn.textContent = '✅ 已应用';
+                    setTimeout(function () { btn.textContent = '✅ 应用参数'; }, 1500);
+                }
+            }).catch(function () { });
+        }
     </script>
 </body>
 

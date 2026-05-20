@@ -13,6 +13,8 @@ idf_component_register(
         "ai.cpp"
         "context.c"
         "servo.c"
+        "PID.c"
+        "tracking.c"
         INCLUDE_DIRS "."
         EMBED_FILES "${INDEX_HTML_GZ}"
 )

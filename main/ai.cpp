@@ -5,6 +5,7 @@
 #include "esp_heap_caps.h"
 #include <cstring>
 #include "context.h"
+#include "tracking.h"
 
 static const char *TAG = "AI";
 
@@ -80,6 +81,9 @@ extern "C" void ai_inference_task(void *arg) {
             // 先写完所有 items 再更新 count，避免读取端看到不一致的状态
             CTX()->detections.count = count;
             CTX()->detections.timestamp = end_time;
+
+            // PID 追踪：检测完成后立即更新舵机
+            tracking_update();
         }
         vTaskDelay(pdMS_TO_TICKS(1));
     }

@@ -7,6 +7,7 @@
 #include "esp_partition.h"
 #include "esp_timer.h"
 #include "servo.h"
+#include "tracking.h"
 #include <stdlib.h>
 #include <string.h>
 #include <sys/param.h>
@@ -239,6 +240,12 @@ static esp_err_t index_handler(httpd_req_t *req) {
 // === 舵机控制 API ===
 // POST /api/servo  body: {"x":90,"y":90,"eyelid":90}
 static esp_err_t servo_handler(httpd_req_t *req) {
+  // 追踪开启时禁止手动控制
+  if (tracking_is_enabled()) {
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_sendstr(req, "{\"ok\":false,\"reason\":\"tracking active\"}");
+  }
+
   char buf[128] = {0};
   int len = httpd_req_recv(req, buf, sizeof(buf) - 1);
   if (len <= 0) {
@@ -342,8 +349,9 @@ static esp_err_t ai_toggle_handler(httpd_req_t *req) {
   bool enabled = (strstr(buf, "true") != NULL);
   CTX()->flags.ai_enabled = enabled;
 
-  // 关闭时立即清空检测结果，避免前端显示残留框
+  // 关闭 AI 时同时关闭追踪，并清空检测结果
   if (!enabled) {
+    tracking_set_enabled(false);
     CTX()->detections.count = 0;
   }
 
@@ -351,6 +359,66 @@ static esp_err_t ai_toggle_handler(httpd_req_t *req) {
   httpd_resp_set_type(req, "application/json");
   return httpd_resp_sendstr(req, enabled ? "{\"enabled\":true}"
                                          : "{\"enabled\":false}");
+}
+
+// === 追踪开关 API ===
+// POST /api/tracking  body: {"enabled":true}
+static esp_err_t tracking_toggle_handler(httpd_req_t *req) {
+  char buf[64] = {0};
+  int len = httpd_req_recv(req, buf, sizeof(buf) - 1);
+  if (len <= 0) {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty body");
+    return ESP_FAIL;
+  }
+
+  bool enabled = (strstr(buf, "true") != NULL);
+  tracking_set_enabled(enabled);
+
+  httpd_resp_set_type(req, "application/json");
+  return httpd_resp_sendstr(req, enabled ? "{\"enabled\":true}"
+                                         : "{\"enabled\":false}");
+}
+
+// === PID 参数读取/设置 API ===
+// GET  /api/pid_params → 返回当前参数
+// POST /api/pid_params → 设置新参数  body: {"kp":0.1,"ki":0.05,"kd":0.0,"max_inc":10}
+static esp_err_t pid_params_get_handler(httpd_req_t *req) {
+  tracking_params_t p = tracking_get_params();
+  char resp[128];
+  snprintf(resp, sizeof(resp),
+           "{\"kp\":%.4f,\"ki\":%.4f,\"kd\":%.4f,\"max_inc\":%.1f}",
+           p.kp, p.ki, p.kd, p.max_increment);
+  httpd_resp_set_type(req, "application/json");
+  return httpd_resp_sendstr(req, resp);
+}
+
+static esp_err_t pid_params_set_handler(httpd_req_t *req) {
+  char buf[128] = {0};
+  int len = httpd_req_recv(req, buf, sizeof(buf) - 1);
+  if (len <= 0) {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty body");
+    return ESP_FAIL;
+  }
+
+  tracking_params_t p = tracking_get_params(); // 保留未修改的值
+  char *ptr;
+
+  ptr = strstr(buf, "\"kp\"");
+  if (ptr) { ptr = strchr(ptr, ':'); if (ptr) p.kp = strtof(ptr + 1, NULL); }
+
+  ptr = strstr(buf, "\"ki\"");
+  if (ptr) { ptr = strchr(ptr, ':'); if (ptr) p.ki = strtof(ptr + 1, NULL); }
+
+  ptr = strstr(buf, "\"kd\"");
+  if (ptr) { ptr = strchr(ptr, ':'); if (ptr) p.kd = strtof(ptr + 1, NULL); }
+
+  ptr = strstr(buf, "\"max_inc\"");
+  if (ptr) { ptr = strchr(ptr, ':'); if (ptr) p.max_increment = strtof(ptr + 1, NULL); }
+
+  tracking_set_params(&p);
+
+  httpd_resp_set_type(req, "application/json");
+  return httpd_resp_sendstr(req, "{\"ok\":true}");
 }
 
 // === 日志 API ===
@@ -417,7 +485,7 @@ esp_err_t start_webserver(void) {
   config.server_port = 80;
   config.core_id = 0;
   config.stack_size = 8192;
-  config.max_uri_handlers = 10;
+  config.max_uri_handlers = 12;
 
   httpd_handle_t server = NULL;
 
@@ -453,6 +521,21 @@ esp_err_t start_webserver(void) {
                           .handler = ai_toggle_handler,
                           .user_ctx = NULL};
     httpd_register_uri_handler(server, &ai_uri);
+    httpd_uri_t tracking_uri = {.uri = "/api/tracking",
+                                .method = HTTP_POST,
+                                .handler = tracking_toggle_handler,
+                                .user_ctx = NULL};
+    httpd_register_uri_handler(server, &tracking_uri);
+    httpd_uri_t pid_get_uri = {.uri = "/api/pid_params",
+                               .method = HTTP_GET,
+                               .handler = pid_params_get_handler,
+                               .user_ctx = NULL};
+    httpd_register_uri_handler(server, &pid_get_uri);
+    httpd_uri_t pid_set_uri = {.uri = "/api/pid_params",
+                               .method = HTTP_POST,
+                               .handler = pid_params_set_handler,
+                               .user_ctx = NULL};
+    httpd_register_uri_handler(server, &pid_set_uri);
     httpd_uri_t logs_uri = {.uri = "/api/logs",
                             .method = HTTP_GET,
                             .handler = logs_handler,

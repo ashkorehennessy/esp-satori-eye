@@ -12,6 +12,7 @@
 #include "web_server.h"
 #include "ai.h"
 #include "servo.h"
+#include "tracking.h"
 #define TAG "app_main"
 void start_benchmark(void);
 void app_main(void)
@@ -30,6 +31,7 @@ void app_main(void)
     wifi_init_softap();
     start_webserver();
     servo_init();
+    tracking_init();
     start_ai();
     start_benchmark();
     ESP_LOGI(TAG, "System Ready! Connect to WiFi 'Satori-Eye' and visit http://192.168.4.1");
