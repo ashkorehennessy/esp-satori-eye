@@ -12,9 +12,9 @@ static const char *TAG = "Servo";
 #define SERVO_LEDC_RESOLUTION LEDC_TIMER_14_BIT // 14-bit: 16384 ticks/period
 #define SERVO_LEDC_MAX_DUTY ((1 << 14) - 1)     // 16383
 
-#define SERVO_CH_X LEDC_CHANNEL_1
-#define SERVO_CH_Y LEDC_CHANNEL_2
-#define SERVO_CH_EYELID LEDC_CHANNEL_3
+#define SERVO_CH_1 LEDC_CHANNEL_1
+#define SERVO_CH_2 LEDC_CHANNEL_2
+#define SERVO_CH_3 LEDC_CHANNEL_3
 
 // 角度限幅
 static int16_t clamp_angle(int16_t angle) {
@@ -62,34 +62,56 @@ void servo_init(void) {
   ESP_ERROR_CHECK(ledc_timer_config(&timer_conf));
 
   // 配置 3 个通道
-  servo_channel_init(SERVO_CH_X, SERVO_PIN_X);
-  servo_channel_init(SERVO_CH_Y, SERVO_PIN_Y);
-  servo_channel_init(SERVO_CH_EYELID, SERVO_PIN_EYELID);
+  servo_channel_init(SERVO_CH_1, SERVO_PIN_1);
+  servo_channel_init(SERVO_CH_2, SERVO_PIN_2);
+  servo_channel_init(SERVO_CH_3, SERVO_PIN_3);
 
-  // 立即转到中位 (90°)
-  servo_set(100, 90, 90);
+  // 初始化到默认位置：X=100, Y=90, eyelid=70(大约七成开)
+  servo_set(100, 90, 70);
 
-  ESP_LOGI(TAG, "Servo initialized — X:GPIO%d Y:GPIO%d Eyelid:GPIO%d → 90°",
-           SERVO_PIN_X, SERVO_PIN_Y, SERVO_PIN_EYELID);
+  ESP_LOGI(TAG, "Servo initialized — S1:GPIO%d S2:GPIO%d S3:GPIO%d",
+           SERVO_PIN_1, SERVO_PIN_2, SERVO_PIN_3);
 }
 
-void servo_set(int16_t x, int16_t y, int16_t eyelid) {
-  x = clamp_angle(x);
-  y = clamp_angle(y);
-  eyelid = clamp_angle(eyelid);
+// === 底层接口：直接控制三路舵机 ===
+void servo_set_raw(int16_t s1, int16_t s2, int16_t s3) {
+  s1 = clamp_angle(s1);
+  s2 = clamp_angle(s2);
+  s3 = clamp_angle(s3);
 
+  ledc_set_duty(SERVO_LEDC_MODE, SERVO_CH_1, angle_to_duty(s1));
+  ledc_update_duty(SERVO_LEDC_MODE, SERVO_CH_1);
+
+  ledc_set_duty(SERVO_LEDC_MODE, SERVO_CH_2, angle_to_duty(s2));
+  ledc_update_duty(SERVO_LEDC_MODE, SERVO_CH_2);
+
+  ledc_set_duty(SERVO_LEDC_MODE, SERVO_CH_3, angle_to_duty(s3));
+  ledc_update_duty(SERVO_LEDC_MODE, SERVO_CH_3);
+}
+
+// === 高级接口：逻辑控制（自动处理 Y-眼皮联动）===
+void servo_set(int16_t x, int16_t y, int16_t eyelid) {
+  // 限幅逻辑参数
+  if (eyelid < 0) eyelid = 0;
+  if (eyelid > 100) eyelid = 100;
+
+  // 物理通道映射
+  int16_t s1 = x;    // servo1 = X 轴直通
+  int16_t s2 = y;    // servo2 = Y 轴直通
+
+  // servo3 = Y-眼皮联动公式
+  // servo3 = RATIO * servo2 + OFFSET - SCALE * eyelid
+  float s3f = EYELID_Y_RATIO * (float)s2 + EYELID_Y_OFFSET - EYELID_SCALE * (float)eyelid;
+  int16_t s3 = (int16_t)s3f;
+  // 联动输出安全限幅
+  if (s3 < 35) s3 = 35;
+  if (s3 > 130) s3 = 130;
+
+  // 保存逻辑状态到 context
   CTX()->servo.x = x;
   CTX()->servo.y = y;
   CTX()->servo.eyelid = eyelid;
 
-  ledc_set_duty(SERVO_LEDC_MODE, SERVO_CH_X, angle_to_duty(x));
-  ledc_update_duty(SERVO_LEDC_MODE, SERVO_CH_X);
-
-  ledc_set_duty(SERVO_LEDC_MODE, SERVO_CH_Y, angle_to_duty(y));
-  ledc_update_duty(SERVO_LEDC_MODE, SERVO_CH_Y);
-
-  ledc_set_duty(SERVO_LEDC_MODE, SERVO_CH_EYELID, angle_to_duty(eyelid));
-  ledc_update_duty(SERVO_LEDC_MODE, SERVO_CH_EYELID);
-
-  ESP_LOGI(TAG, "Set → X:%d° Y:%d° Eyelid:%d°", x, y, eyelid);
+  // 下发到硬件
+  servo_set_raw(s1, s2, s3);
 }

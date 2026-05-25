@@ -499,6 +499,69 @@
             text-align: center;
         }
 
+        /* === 2D 摇杆 === */
+        .joystick-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .joystick-pad {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            background: #F8F5F7;
+            border: 2px solid rgba(109, 80, 99, 0.15);
+            border-radius: 12px;
+            touch-action: none;
+            cursor: crosshair;
+            overflow: hidden;
+        }
+
+        .joystick-crosshair-h,
+        .joystick-crosshair-v {
+            position: absolute;
+            background: rgba(109, 80, 99, 0.08);
+        }
+
+        .joystick-crosshair-h {
+            left: 0; right: 0;
+            top: 50%;
+            height: 1px;
+        }
+
+        .joystick-crosshair-v {
+            top: 0; bottom: 0;
+            left: 50%;
+            width: 1px;
+        }
+
+        .joystick-thumb {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            box-shadow: 0 2px 8px rgba(109, 80, 99, 0.5);
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            transition: none;
+        }
+
+        .joystick-values {
+            display: flex;
+            gap: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .joystick-values span {
+            color: var(--text-main);
+        }
+
         /* === 参数调节面板 === */
         .params-panel {
             display: none;
@@ -782,21 +845,56 @@
 
             <!-- 舵机调试控制面板 -->
             <div class="control-panel servo-panel" id="servoPanel">
-                <div class="servo-slider-group">
-                    <div class="servo-slider-item">
-                        <label>X 轴</label>
-                        <input type="range" min="0" max="180" value="90" id="servoX" oninput="onServoChange()">
-                        <span class="servo-val" id="servoXVal">90°</span>
+                <div class="switch-group" style="margin-bottom:12px;">
+                    <div class="switch-item">
+                        <span class="switch-label">直接法则</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="servoRawToggle" onchange="onServoModeChange(this)">
+                            <span class="slider"></span>
+                        </label>
                     </div>
-                    <div class="servo-slider-item">
-                        <label>Y 轴</label>
-                        <input type="range" min="0" max="180" value="90" id="servoY" oninput="onServoChange()">
-                        <span class="servo-val" id="servoYVal">90°</span>
+                </div>
+
+                <!-- 正常法则：摇杆 + 眼皮滑条 -->
+                <div id="servoNormalGroup">
+                    <div class="joystick-wrapper">
+                        <div class="joystick-pad" id="joystickPad">
+                            <div class="joystick-crosshair-h"></div>
+                            <div class="joystick-crosshair-v"></div>
+                            <div class="joystick-thumb" id="joystickThumb"></div>
+                        </div>
+                        <div class="joystick-values">
+                            X: <span id="joystickXVal">100°</span>&nbsp;&nbsp;
+                            Y: <span id="joystickYVal">90°</span>
+                        </div>
                     </div>
-                    <div class="servo-slider-item">
-                        <label>眼皮</label>
-                        <input type="range" min="0" max="180" value="90" id="servoEyelid" oninput="onServoChange()">
-                        <span class="servo-val" id="servoEyelidVal">90°</span>
+                    <div class="servo-slider-group" style="margin-top:12px;">
+                        <div class="servo-slider-item">
+                            <label>睁眼</label>
+                            <input type="range" min="0" max="100" value="70" id="servoEyelid" oninput="onEyelidChange()">
+                            <span class="servo-val" id="servoEyelidVal">70%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 直接法则：三滑条 -->
+                <div id="servoRawGroup" style="display:none;">
+                    <div class="servo-slider-group">
+                        <div class="servo-slider-item">
+                            <label>S1</label>
+                            <input type="range" min="0" max="180" value="90" id="rawS1" oninput="onRawServoChange()">
+                            <span class="servo-val" id="rawS1Val">90°</span>
+                        </div>
+                        <div class="servo-slider-item">
+                            <label>S2</label>
+                            <input type="range" min="0" max="180" value="90" id="rawS2" oninput="onRawServoChange()">
+                            <span class="servo-val" id="rawS2Val">90°</span>
+                        </div>
+                        <div class="servo-slider-item">
+                            <label>S3</label>
+                            <input type="range" min="0" max="180" value="90" id="rawS3" oninput="onRawServoChange()">
+                            <span class="servo-val" id="rawS3Val">90°</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -919,25 +1017,120 @@
 
         // === 舵机控制 ===
         var servoTimer = null;
-        function onServoChange() {
-            var x = document.getElementById('servoX').value;
-            var y = document.getElementById('servoY').value;
-            var e = document.getElementById('servoEyelid').value;
-            document.getElementById('servoXVal').innerText = x + '°';
-            document.getElementById('servoYVal').innerText = y + '°';
-            document.getElementById('servoEyelidVal').innerText = e + '°';
+        var joystickX = 100, joystickY = 90;  // 当前逻辑角度
+        var joystickEyelid = 70;
+        var joystickDragging = false;
 
-            // 节流：最多每 100ms 发一次请求
+        // X/Y 范围
+        var JOY_X_MIN = 65, JOY_X_MAX = 135;
+        var JOY_Y_MIN = 65, JOY_Y_MAX = 135;
+
+        function onServoModeChange(checkbox) {
+            var raw = checkbox.checked;
+            document.getElementById('servoNormalGroup').style.display = raw ? 'none' : '';
+            document.getElementById('servoRawGroup').style.display = raw ? '' : 'none';
+        }
+
+        // === 摇杆初始化 ===
+        function initJoystick() {
+            var pad = document.getElementById('joystickPad');
+            // 初始位置
+            joystickSetThumbFromAngle(joystickX, joystickY);
+
+            pad.addEventListener('pointerdown', function (e) {
+                joystickDragging = true;
+                pad.setPointerCapture(e.pointerId);
+                joystickHandlePointer(e);
+            });
+            pad.addEventListener('pointermove', function (e) {
+                if (!joystickDragging) return;
+                joystickHandlePointer(e);
+            });
+            pad.addEventListener('pointerup', function (e) {
+                joystickDragging = false;
+            });
+            pad.addEventListener('pointercancel', function (e) {
+                joystickDragging = false;
+            });
+        }
+
+        function joystickHandlePointer(e) {
+            var pad = document.getElementById('joystickPad');
+            var rect = pad.getBoundingClientRect();
+            // 归一化到 0~1
+            var nx = (e.clientX - rect.left) / rect.width;
+            var ny = (e.clientY - rect.top) / rect.height;
+            nx = Math.max(0, Math.min(1, nx));
+            ny = Math.max(0, Math.min(1, ny));
+
+            // 映射到角度范围
+            joystickX = Math.round(JOY_X_MIN + nx * (JOY_X_MAX - JOY_X_MIN));
+            joystickY = Math.round(JOY_Y_MAX - ny * (JOY_Y_MAX - JOY_Y_MIN));
+
+            // 更新 UI
+            joystickSetThumbFromNorm(nx, ny);
+            document.getElementById('joystickXVal').innerText = joystickX + '°';
+            document.getElementById('joystickYVal').innerText = joystickY + '°';
+
+            // 节流发送
+            sendNormalServo();
+        }
+
+        function joystickSetThumbFromAngle(ax, ay) {
+            var nx = (ax - JOY_X_MIN) / (JOY_X_MAX - JOY_X_MIN);
+            var ny = (JOY_Y_MAX - ay) / (JOY_Y_MAX - JOY_Y_MIN);
+            joystickSetThumbFromNorm(nx, ny);
+        }
+
+        function joystickSetThumbFromNorm(nx, ny) {
+            var pad = document.getElementById('joystickPad');
+            var thumb = document.getElementById('joystickThumb');
+            thumb.style.left = (nx * pad.offsetWidth) + 'px';
+            thumb.style.top = (ny * pad.offsetHeight) + 'px';
+        }
+
+        // 睁眼滑条
+        function onEyelidChange() {
+            joystickEyelid = parseInt(document.getElementById('servoEyelid').value);
+            document.getElementById('servoEyelidVal').innerText = joystickEyelid + '%';
+            sendNormalServo();
+        }
+
+        // 节流发送正常模式
+        function sendNormalServo() {
             if (servoTimer) return;
             servoTimer = setTimeout(function () {
                 servoTimer = null;
                 fetch('/api/servo', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ x: parseInt(x), y: parseInt(y), eyelid: parseInt(e) })
+                    body: JSON.stringify({ x: joystickX, y: joystickY, eyelid: joystickEyelid })
                 }).catch(function () { });
             }, 100);
         }
+
+        // === 直接法则：三滑条 ===
+        function onRawServoChange() {
+            var s1 = document.getElementById('rawS1').value;
+            var s2 = document.getElementById('rawS2').value;
+            var s3 = document.getElementById('rawS3').value;
+            document.getElementById('rawS1Val').innerText = s1 + '°';
+            document.getElementById('rawS2Val').innerText = s2 + '°';
+            document.getElementById('rawS3Val').innerText = s3 + '°';
+
+            if (servoTimer) return;
+            servoTimer = setTimeout(function () {
+                servoTimer = null;
+                fetch('/api/servo_raw', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ s1: parseInt(s1), s2: parseInt(s2), s3: parseInt(s3) })
+                }).catch(function () { });
+            }, 100);
+        }
+
+        // 页面加载时初始化摇杆
+        initJoystick();
 
         // === 推流 FPS 监测（由服务端统计，通过 detections API 获取）===
         var fpsDisplay = 0;

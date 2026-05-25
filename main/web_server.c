@@ -290,6 +290,34 @@ static esp_err_t servo_handler(httpd_req_t *req) {
   return httpd_resp_sendstr(req, "{\"ok\":true}");
 }
 
+// === 舵机直接控制 API (无联动) ===
+// POST /api/servo_raw  body: {"s1":90,"s2":90,"s3":90}
+static esp_err_t servo_raw_handler(httpd_req_t *req) {
+  char buf[128] = {0};
+  int len = httpd_req_recv(req, buf, sizeof(buf) - 1);
+  if (len <= 0) {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty body");
+    return ESP_FAIL;
+  }
+
+  int s1 = 90, s2 = 90, s3 = 90;
+  char *p;
+
+  p = strstr(buf, "\"s1\"");
+  if (p) { p = strchr(p, ':'); if (p) s1 = atoi(p + 1); }
+
+  p = strstr(buf, "\"s2\"");
+  if (p) { p = strchr(p, ':'); if (p) s2 = atoi(p + 1); }
+
+  p = strstr(buf, "\"s3\"");
+  if (p) { p = strchr(p, ':'); if (p) s3 = atoi(p + 1); }
+
+  servo_set_raw((int16_t)s1, (int16_t)s2, (int16_t)s3);
+
+  httpd_resp_set_type(req, "application/json");
+  return httpd_resp_sendstr(req, "{\"ok\":true}");
+}
+
 // === AI 检测结果 API ===
 // GET /api/detections → 返回最新检测框 JSON
 static esp_err_t detections_handler(httpd_req_t *req) {
@@ -485,7 +513,7 @@ esp_err_t start_webserver(void) {
   config.server_port = 80;
   config.core_id = 0;
   config.stack_size = 8192;
-  config.max_uri_handlers = 12;
+  config.max_uri_handlers = 14;
 
   httpd_handle_t server = NULL;
 
@@ -506,6 +534,11 @@ esp_err_t start_webserver(void) {
                              .handler = servo_handler,
                              .user_ctx = NULL};
     httpd_register_uri_handler(server, &servo_uri);
+    httpd_uri_t servo_raw_uri = {.uri = "/api/servo_raw",
+                                 .method = HTTP_POST,
+                                 .handler = servo_raw_handler,
+                                 .user_ctx = NULL};
+    httpd_register_uri_handler(server, &servo_raw_uri);
     httpd_uri_t det_uri = {.uri = "/api/detections",
                            .method = HTTP_GET,
                            .handler = detections_handler,
