@@ -4,6 +4,7 @@
 #include "servo.h"
 #include "ai.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include <math.h>
 
 static const char *TAG = "Tracking";
@@ -11,8 +12,8 @@ static const char *TAG = "Tracking";
 // =============================================
 // 运行时可调参数（默认值，可通过 Web UI 修改）
 // =============================================
-static float s_kp = 0.07f;
-static float s_ki = 0.03f;
+static float s_kp = 0.1f;
+static float s_ki = 0.045f;
 static float s_kd = 0.0f;
 static float s_max_increment = 90.0f;
 
@@ -28,8 +29,6 @@ static float s_max_increment = 90.0f;
 #define SERVO_Y_MAX   120
 #define SERVO_Y_MID   90
 
-// =============================================
-
 static PID_Incremental pid_x;
 static PID_Incremental pid_y;
 
@@ -44,11 +43,34 @@ static inline float clampf(float val, float lo, float hi) {
     return val;
 }
 
+// === 动态 PID 增益调度 ===
+#define KP_RATIO_SCALE  0.7f
+#define KP_RATIO_BASE   0.3f
+#define KP_RATIO_SENS   60.0f
+
+#define KI_RATIO_SCALE  0.7f
+#define KI_RATIO_BASE   0.3f
+#define KI_RATIO_SENS   65.0f
+
+// =============================================
+// 边界丢失追逐
+// =============================================
+#define EDGE_THRESHOLD  15          // 检测框边缘距画面边界 < 15px 视为靠近边界
+#define EDGE_CHASE_US   2000000     // 边界追逐持续时间 2000ms
+
+// 上一次检测框的边界
+static int last_x1, last_y1, last_x2, last_y2;
+static float last_cx, last_cy;
+
+// 边界追逐状态
+static volatile bool edge_chasing;
+static float edge_chase_cx, edge_chase_cy;  // 追逐目标坐标
+static int64_t edge_chase_start;            // 追逐开始时间
+
 void tracking_init(void) {
     // 增量式 PID，输出范围为实际舵机行程
     pid_x = PID_Incremental_Init(s_kp, s_ki, s_kd, SERVO_X_MAX, SERVO_X_MIN, false, 0.5f);
     pid_y = PID_Incremental_Init(s_kp, s_ki, s_kd, SERVO_Y_MAX, SERVO_Y_MIN, false, 0.5f);
-    // PID 累加器初始化到舵机中位
     pid_x.out = (float)SERVO_X_MID;
     pid_x.last_out = pid_x.out;
     pid_y.out = (float)SERVO_Y_MID;
@@ -57,20 +79,10 @@ void tracking_init(void) {
     prev_angle_x = (float)SERVO_X_MID;
     prev_angle_y = (float)SERVO_Y_MID;
 
+    edge_chasing = false;
+
     ESP_LOGI(TAG, "Tracking initialized — Kp=%.3f Ki=%.3f Kd=%.3f", s_kp, s_ki, s_kd);
 }
-
-// === 动态 PID 增益调度 ===
-// ratio = scale * tanh(|error| / sensitivity) + base
-// 目标靠近中心 → ratio 小 → 减少震荡
-// 目标远离中心 → ratio 大 → 加快响应
-#define KP_RATIO_SCALE  0.7f
-#define KP_RATIO_BASE   0.3f
-#define KP_RATIO_SENS   60.0f
-
-#define KI_RATIO_SCALE  0.7f
-#define KI_RATIO_BASE   0.3f
-#define KI_RATIO_SENS   65.0f
 
 // === PID 计算 + 驱动舵机 ===
 static void pid_to_servo(float cx, float cy) {
@@ -106,20 +118,58 @@ static void pid_to_servo(float cx, float cy) {
     servo_set((int16_t)angle_x, (int16_t)angle_y, CTX()->servo.eyelid);
 }
 
-// === Core 0 每帧调用（保留接口，当前为空操作）===
+// === Core 0 每帧调用：边界丢失时继续追踪 ===
 void tracking_predict(void) {
-    // 直接 PID 模式下不需要预测，PID 在 correct 中执行
+    if (!CTX()->flags.tracking_enabled) return;
+    if (!edge_chasing) return;
+
+    // 超时检查
+    if (esp_timer_get_time() - edge_chase_start > EDGE_CHASE_US) {
+        edge_chasing = false;
+        ESP_LOGI(TAG, "Edge chase timeout");
+        return;
+    }
+
+    // 继续向丢失方向 PID
+    pid_to_servo(edge_chase_cx, edge_chase_cy);
 }
 
 // === Core 1 调用：AI 检测到目标后立即算 PID ===
-void tracking_correct(float cx, float cy) {
+void tracking_correct(float cx, float cy, int x1, int y1, int x2, int y2) {
     if (!CTX()->flags.tracking_enabled) return;
+
+    // 保存检测框信息（供 target_lost 判断边界）
+    last_cx = cx;  last_cy = cy;
+    last_x1 = x1;  last_y1 = y1;
+    last_x2 = x2;  last_y2 = y2;
+
+    // 检测到目标 → 取消边界追逐
+    edge_chasing = false;
+
     pid_to_servo(cx, cy);
 }
 
 // === Core 1 调用：AI 未检测到目标 ===
 void tracking_target_lost(void) {
-    // 丢失目标 = 保持当前位置，无需操作
+    if (!CTX()->flags.tracking_enabled) return;
+
+    // 判断最后一次检测框是否靠近画面边界
+    bool near_left   = (last_x1 < EDGE_THRESHOLD);
+    bool near_right  = (last_x2 > AI_W - EDGE_THRESHOLD);
+    bool near_top    = (last_y1 < EDGE_THRESHOLD);
+    bool near_bottom = (last_y2 > AI_H - EDGE_THRESHOLD);
+
+    if (near_left || near_right || near_top || near_bottom) {
+        // 启动边界追逐：用最后检测中心继续 PID
+        edge_chasing = true;
+        edge_chase_cx = last_cx;
+        edge_chase_cy = last_cy;
+        edge_chase_start = esp_timer_get_time();
+        ESP_LOGI(TAG, "Edge chase started (L:%d R:%d T:%d B:%d) → target=(%.0f,%.0f)",
+                 near_left, near_right, near_top, near_bottom,
+                 edge_chase_cx, edge_chase_cy);
+    }
+    // 不靠近边界 → 正常丢失，保持当前位置
 }
 
 void tracking_set_enabled(bool enabled) {
@@ -140,6 +190,8 @@ void tracking_set_enabled(bool enabled) {
 
         prev_angle_x = pid_x.out;
         prev_angle_y = pid_y.out;
+
+        edge_chasing = false;
     }
     ESP_LOGI(TAG, "Tracking %s", enabled ? "ON" : "OFF");
 }

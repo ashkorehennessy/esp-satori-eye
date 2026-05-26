@@ -18,13 +18,14 @@ typedef struct {
 // 初始化追踪模块（创建 PID 实例）
 void tracking_init(void);
 
-// Core 0 每帧调用（预留接口，当前为空操作）
+// Core 0 每帧调用：边界丢失时继续追踪
 void tracking_predict(void);
 
 // Core 1 检测完成后调用：用检测框中心跑 PID → 驱动舵机
-void tracking_correct(float cx, float cy);
+// x1,y1,x2,y2 为检测框边界（用于边界丢失判断）
+void tracking_correct(float cx, float cy, int x1, int y1, int x2, int y2);
 
-// Core 1 检测到 count=0 时调用
+// Core 1 检测到 count=0 时调用（边界丢失时触发追逐）
 void tracking_target_lost(void);
 
 // === 开关与参数 ===

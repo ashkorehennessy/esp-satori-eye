@@ -86,7 +86,9 @@ extern "C" void ai_inference_task(void *arg) {
             if (count > 0) {
                 float cx = (float)(CTX()->detections.items[0].x1 + CTX()->detections.items[0].x2) / 2.0f;
                 float cy = (float)(CTX()->detections.items[0].y1 + CTX()->detections.items[0].y2) / 2.0f;
-                tracking_correct(cx, cy);
+                tracking_correct(cx, cy,
+                    CTX()->detections.items[0].x1, CTX()->detections.items[0].y1,
+                    CTX()->detections.items[0].x2, CTX()->detections.items[0].y2);
             } else {
                 tracking_target_lost();
             }
