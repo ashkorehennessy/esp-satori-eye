@@ -4,6 +4,7 @@
 #include "servo.h"
 #include "ai.h"
 #include "esp_log.h"
+#include <math.h>
 
 static const char *TAG = "Tracking";
 
@@ -59,8 +60,36 @@ void tracking_init(void) {
     ESP_LOGI(TAG, "Tracking initialized — Kp=%.3f Ki=%.3f Kd=%.3f", s_kp, s_ki, s_kd);
 }
 
+// === 动态 PID 增益调度 ===
+// ratio = scale * tanh(|error| / sensitivity) + base
+// 目标靠近中心 → ratio 小 → 减少震荡
+// 目标远离中心 → ratio 大 → 加快响应
+#define KP_RATIO_SCALE  0.7f
+#define KP_RATIO_BASE   0.3f
+#define KP_RATIO_SENS   60.0f
+
+#define KI_RATIO_SCALE  0.7f
+#define KI_RATIO_BASE   0.3f
+#define KI_RATIO_SENS   65.0f
+
 // === PID 计算 + 驱动舵机 ===
 static void pid_to_servo(float cx, float cy) {
+    // 计算误差绝对值
+    float err_x = fabsf(cx - SETPOINT_X);
+    float err_y = fabsf(cy - SETPOINT_Y);
+
+    // 动态增益比例
+    float kp_ratio_x = KP_RATIO_SCALE * tanhf(err_x / KP_RATIO_SENS) + KP_RATIO_BASE;
+    float ki_ratio_x = KI_RATIO_SCALE * tanhf(err_x / KI_RATIO_SENS) + KI_RATIO_BASE;
+    float kp_ratio_y = KP_RATIO_SCALE * tanhf(err_y / KP_RATIO_SENS) + KP_RATIO_BASE;
+    float ki_ratio_y = KI_RATIO_SCALE * tanhf(err_y / KI_RATIO_SENS) + KI_RATIO_BASE;
+
+    // 应用到 PID（基准值 × 比例）
+    pid_x.Kp = s_kp * kp_ratio_x;
+    pid_x.Ki = s_ki * ki_ratio_x;
+    pid_y.Kp = s_kp * kp_ratio_y;
+    pid_y.Ki = s_ki * ki_ratio_y;
+
     float angle_x = PID_Incremental_Calc(&pid_x, cx, SETPOINT_X);
     float angle_y = PID_Incremental_Calc(&pid_y, cy, SETPOINT_Y);
 
