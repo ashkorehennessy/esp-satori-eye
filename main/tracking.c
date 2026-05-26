@@ -16,9 +16,6 @@ static float s_ki = 0.03f;
 static float s_kd = 0.0f;
 static float s_max_increment = 90.0f;
 
-// 舵机方向反转标志（true = 画面右移时舵机角度减小）
-#define INVERT_X   true
-#define INVERT_Y   true
 
 // 设定点：画面中心
 #define SETPOINT_X  ((float)AI_W / 2.0f)   // 120.0
@@ -33,10 +30,15 @@ static float s_max_increment = 90.0f;
 #define SERVO_Y_MID   90
 
 // =============================================
-// 运动预测器参数
+// 追踪模式选择：1 = 运动预测补帧, 0 = 直接 PID（仅在检测时更新）
 // =============================================
+#define USE_MOTION_PREDICT  0
+
+#if USE_MOTION_PREDICT
+// 运动预测器参数
 #define VEL_SMOOTH_ALPHA  0.5f        // 速度指数平滑系数（越大越灵敏）
 #define TARGET_LOST_US    500000      // 兜底超时 500ms（正常走 target_lost 立停）
+#endif
 
 // =============================================
 
@@ -47,12 +49,14 @@ static PID_Incremental pid_y;
 static float prev_angle_x;
 static float prev_angle_y;
 
+#if USE_MOTION_PREDICT
 // 运动预测器状态
 static float pred_cx, pred_cy;          // 预测位置（画面坐标 0~240）
 static float vel_x, vel_y;             // 速度（像素 / 微秒）
 static int64_t last_predict_time;       // 上次 predict 时间戳
 static int64_t last_correct_time;       // 上次 correct 时间戳
 static volatile bool has_target;        // 是否有跟踪目标
+#endif
 
 // 限幅辅助
 static inline float clampf(float val, float lo, float hi) {
@@ -63,12 +67,8 @@ static inline float clampf(float val, float lo, float hi) {
 
 void tracking_init(void) {
     // 增量式 PID，输出范围为实际舵机行程
-    pid_x = PID_Incremental_Init(s_kp, s_ki, s_kd,
-                                  SERVO_X_MAX, SERVO_X_MIN,
-                                  true, 0.5f);
-    pid_y = PID_Incremental_Init(s_kp, s_ki, s_kd,
-                                  SERVO_Y_MAX, SERVO_Y_MIN,
-                                  true, 0.5f);
+    pid_x = PID_Incremental_Init(s_kp, s_ki, s_kd, SERVO_X_MAX, SERVO_X_MIN, false, 0.5f);
+    pid_y = PID_Incremental_Init(s_kp, s_ki, s_kd, SERVO_Y_MAX, SERVO_Y_MIN, false, 0.5f);
     // PID 累加器初始化到舵机中位
     pid_x.out = (float)SERVO_X_MID;
     pid_x.last_out = pid_x.out;
@@ -78,6 +78,7 @@ void tracking_init(void) {
     prev_angle_x = (float)SERVO_X_MID;
     prev_angle_y = (float)SERVO_Y_MID;
 
+#if USE_MOTION_PREDICT
     // 预测器初始化
     pred_cx = SETPOINT_X;
     pred_cy = SETPOINT_Y;
@@ -86,44 +87,16 @@ void tracking_init(void) {
     last_predict_time = esp_timer_get_time();
     last_correct_time = last_predict_time;
     has_target = false;
+#endif
 
-    ESP_LOGI(TAG, "Tracking initialized — Kp=%.2f Ki=%.3f Kd=%.2f InvX=%d InvY=%d",
-             s_kp, s_ki, s_kd, INVERT_X, INVERT_Y);
+    ESP_LOGI(TAG, "Tracking initialized — Kp=%.3f Ki=%.3f Kd=%.3f",
+             s_kp, s_ki, s_kd);
 }
 
-// === Core 0 调用：每帧预测 + PID → servo ===
-void tracking_predict(void) {
-    if (!CTX()->flags.tracking_enabled) return;
-    if (!has_target) return;  // 无目标时保持不动
-
-    int64_t now = esp_timer_get_time();
-
-    // 兜底超时检查（正常情况下 target_lost() 会更早触发）
-    if (now - last_correct_time > TARGET_LOST_US) {
-        has_target = false;
-        ESP_LOGW(TAG, "Target lost (timeout)");
-        return;
-    }
-
-    // 时间差（微秒）
-    float dt = (float)(now - last_predict_time);
-    last_predict_time = now;
-
-    // 外推预测位置
-    pred_cx += vel_x * dt;
-    pred_cy += vel_y * dt;
-
-    // 限制在画面范围内
-    pred_cx = clampf(pred_cx, 0, (float)AI_W);
-    pred_cy = clampf(pred_cy, 0, (float)AI_H);
-
-    // 方向处理
-    float input_x = INVERT_X ? (AI_W - pred_cx) : pred_cx;
-    float input_y = INVERT_Y ? (AI_H - pred_cy) : pred_cy;
-
-    // PID 计算
-    float angle_x = PID_Incremental_Calc(&pid_x, input_x, SETPOINT_X);
-    float angle_y = PID_Incremental_Calc(&pid_y, input_y, SETPOINT_Y);
+// === PID → 舵机的公共逻辑 ===
+static void pid_to_servo(float cx, float cy) {
+    float angle_x = PID_Incremental_Calc(&pid_x, cx, SETPOINT_X);
+    float angle_y = PID_Incremental_Calc(&pid_y, cy, SETPOINT_Y);
 
     // 单次增量限幅
     angle_x = clampf(angle_x, prev_angle_x - s_max_increment, prev_angle_x + s_max_increment);
@@ -135,51 +108,77 @@ void tracking_predict(void) {
     prev_angle_x = angle_x;
     prev_angle_y = angle_y;
 
-    // 驱动舵机
     servo_set((int16_t)angle_x, (int16_t)angle_y, CTX()->servo.eyelid);
+}
+
+// === Core 0 调用：每帧预测 + PID → servo ===
+void tracking_predict(void) {
+#if USE_MOTION_PREDICT
+    if (!CTX()->flags.tracking_enabled) return;
+    if (!has_target) return;
+
+    int64_t now = esp_timer_get_time();
+
+    // 兜底超时检查
+    if (now - last_correct_time > TARGET_LOST_US) {
+        has_target = false;
+        ESP_LOGW(TAG, "Target lost (timeout)");
+        return;
+    }
+
+    float dt = (float)(now - last_predict_time);
+    last_predict_time = now;
+
+    pred_cx += vel_x * dt;
+    pred_cy += vel_y * dt;
+    pred_cx = clampf(pred_cx, 0, (float)AI_W);
+    pred_cy = clampf(pred_cy, 0, (float)AI_H);
+
+    pid_to_servo(pred_cx, pred_cy);
+#endif
+    // USE_MOTION_PREDICT=0 时，predict 为空操作，PID 在 correct 中执行
 }
 
 // === Core 1 调用：AI 检测到目标后校正 ===
 void tracking_correct(float cx, float cy) {
     if (!CTX()->flags.tracking_enabled) return;
 
+#if USE_MOTION_PREDICT
     int64_t now = esp_timer_get_time();
 
     if (has_target) {
-        // 计算从上次校正到现在的时间
         float dt = (float)(now - last_correct_time);
-        if (dt > 1000) {  // 至少 1ms，防除零
-            // 新速度 = (真实位置 - 预测位置) / dt
-            // 注意：用真实位置与预测位置的差，因为预测位置已经在外推了
-            // 如果预测准确，差值≈0，速度基本不变
-            // 如果预测偏了，差值会修正速度方向
+        if (dt > 1000) {
             float new_vel_x = (cx - pred_cx) / dt;
             float new_vel_y = (cy - pred_cy) / dt;
-
-            // 指数平滑
             vel_x = VEL_SMOOTH_ALPHA * new_vel_x + (1.0f - VEL_SMOOTH_ALPHA) * vel_x;
             vel_y = VEL_SMOOTH_ALPHA * new_vel_y + (1.0f - VEL_SMOOTH_ALPHA) * vel_y;
         }
     } else {
-        // 首次获得目标，速度归零
         vel_x = 0;
         vel_y = 0;
     }
 
-    // 强制校正位置到真实检测值
     pred_cx = cx;
     pred_cy = cy;
     last_correct_time = now;
     has_target = true;
+#else
+    // 直接 PID 模式：检测到就立即算 PID 并驱动舵机
+    pid_to_servo(cx, cy);
+#endif
 }
 
 // === Core 1 调用：AI 未检测到目标 ===
 void tracking_target_lost(void) {
+#if USE_MOTION_PREDICT
     if (!has_target) return;
     has_target = false;
     vel_x = 0;
     vel_y = 0;
     ESP_LOGI(TAG, "Target lost (AI: count=0)");
+#endif
+    // 直接 PID 模式下丢失 = 保持当前位置，无需操作
 }
 
 void tracking_set_enabled(bool enabled) {
@@ -201,6 +200,7 @@ void tracking_set_enabled(bool enabled) {
         prev_angle_x = pid_x.out;
         prev_angle_y = pid_y.out;
 
+#if USE_MOTION_PREDICT
         // 预测器重置
         pred_cx = SETPOINT_X;
         pred_cy = SETPOINT_Y;
@@ -209,6 +209,7 @@ void tracking_set_enabled(bool enabled) {
         last_predict_time = esp_timer_get_time();
         last_correct_time = last_predict_time;
         has_target = false;
+#endif
     }
     ESP_LOGI(TAG, "Tracking %s", enabled ? "ON" : "OFF");
 }

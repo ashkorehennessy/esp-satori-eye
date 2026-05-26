@@ -182,6 +182,8 @@
             border: 1px solid rgba(109, 80, 99, 0.1);
             scrollbar-width: thin;
             scrollbar-color: #DDD #FFF;
+            user-select: text;
+            -webkit-user-select: text;
         }
 
         .log-body::-webkit-scrollbar {
@@ -527,13 +529,15 @@
         }
 
         .joystick-crosshair-h {
-            left: 0; right: 0;
+            left: 0;
+            right: 0;
             top: 50%;
             height: 1px;
         }
 
         .joystick-crosshair-v {
-            top: 0; bottom: 0;
+            top: 0;
+            bottom: 0;
             left: 50%;
             width: 1px;
         }
@@ -871,7 +875,8 @@
                     <div class="servo-slider-group" style="margin-top:12px;">
                         <div class="servo-slider-item">
                             <label>睁眼</label>
-                            <input type="range" min="0" max="100" value="70" id="servoEyelid" oninput="onEyelidChange()">
+                            <input type="range" min="0" max="100" value="70" id="servoEyelid"
+                                oninput="onEyelidChange()">
                             <span class="servo-val" id="servoEyelidVal">70%</span>
                         </div>
                     </div>
@@ -1016,7 +1021,6 @@
         }
 
         // === 舵机控制 ===
-        var servoTimer = null;
         var joystickX = 100, joystickY = 90;  // 当前逻辑角度
         var joystickEyelid = 70;
         var joystickDragging = false;
@@ -1096,20 +1100,25 @@
             sendNormalServo();
         }
 
-        // 节流发送正常模式
+        // 节流发送正常模式（串行化：等上一个请求完成再发）
+        var servoPending = false;
+        var servoQueued = false;
         function sendNormalServo() {
-            if (servoTimer) return;
-            servoTimer = setTimeout(function () {
-                servoTimer = null;
-                fetch('/api/servo', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ x: joystickX, y: joystickY, eyelid: joystickEyelid })
-                }).catch(function () { });
-            }, 100);
+            if (servoPending) { servoQueued = true; return; }
+            servoPending = true;
+            fetch('/api/servo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ x: joystickX, y: joystickY, eyelid: joystickEyelid })
+            }).catch(function () { }).then(function () {
+                servoPending = false;
+                if (servoQueued) { servoQueued = false; sendNormalServo(); }
+            });
         }
 
         // === 直接法则：三滑条 ===
+        var rawPending = false;
+        var rawQueued = false;
         function onRawServoChange() {
             var s1 = document.getElementById('rawS1').value;
             var s2 = document.getElementById('rawS2').value;
@@ -1118,15 +1127,16 @@
             document.getElementById('rawS2Val').innerText = s2 + '°';
             document.getElementById('rawS3Val').innerText = s3 + '°';
 
-            if (servoTimer) return;
-            servoTimer = setTimeout(function () {
-                servoTimer = null;
-                fetch('/api/servo_raw', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ s1: parseInt(s1), s2: parseInt(s2), s3: parseInt(s3) })
-                }).catch(function () { });
-            }, 100);
+            if (rawPending) { rawQueued = true; return; }
+            rawPending = true;
+            fetch('/api/servo_raw', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ s1: parseInt(s1), s2: parseInt(s2), s3: parseInt(s3) })
+            }).catch(function () { }).then(function () {
+                rawPending = false;
+                if (rawQueued) { rawQueued = false; onRawServoChange(); }
+            });
         }
 
         // 页面加载时初始化摇杆
