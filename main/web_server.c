@@ -407,6 +407,51 @@ static esp_err_t tracking_toggle_handler(httpd_req_t *req) {
                                          : "{\"enabled\":false}");
 }
 
+// === 闭眼控制 ===
+// POST /api/close_eyes  body: {"closed":true}
+static int16_t saved_s1, saved_s2, saved_s3;
+static bool saved_tracking;
+static bool eyes_closed = false;
+
+static esp_err_t close_eyes_handler(httpd_req_t *req) {
+  char buf[64] = {0};
+  int len = httpd_req_recv(req, buf, sizeof(buf) - 1);
+  if (len <= 0) {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty body");
+    return ESP_FAIL;
+  }
+
+  bool closed = (strstr(buf, "true") != NULL);
+
+  if (closed && !eyes_closed) {
+    // 保存当前状态
+    saved_s1 = CTX()->servo.x;
+    saved_s2 = CTX()->servo.y;
+    saved_s3 = CTX()->servo.eyelid;
+    saved_tracking = tracking_is_enabled();
+    // 关闭追踪 + 居中 + 闭眼
+    tracking_set_enabled(false);
+    servo_set_raw(100, 130, 130);
+    eyes_closed = true;
+    ESP_LOGI(TAG, "Eyes closed (saved: s1=%d s2=%d s3=%d tracking=%d)",
+             saved_s1, saved_s2, saved_s3, saved_tracking);
+  } else if (!closed && eyes_closed) {
+    // 恢复状态
+    servo_set_raw(saved_s1, saved_s2, saved_s3);
+    if (saved_tracking) tracking_set_enabled(true);
+    eyes_closed = false;
+    ESP_LOGI(TAG, "Eyes opened (restored: s1=%d s2=%d s3=%d tracking=%d)",
+             saved_s1, saved_s2, saved_s3, saved_tracking);
+  }
+
+  char resp[64];
+  snprintf(resp, sizeof(resp), "{\"closed\":%s,\"tracking\":%s}",
+           eyes_closed ? "true" : "false",
+           (!eyes_closed && saved_tracking) ? "true" : "false");
+  httpd_resp_set_type(req, "application/json");
+  return httpd_resp_sendstr(req, resp);
+}
+
 // === PID 参数读取/设置 API ===
 // GET  /api/pid_params → 返回当前参数
 // POST /api/pid_params → 设置新参数  body: {"kp":0.1,"ki":0.05,"kd":0.0,"max_inc":10}
@@ -559,6 +604,11 @@ esp_err_t start_webserver(void) {
                                 .handler = tracking_toggle_handler,
                                 .user_ctx = NULL};
     httpd_register_uri_handler(server, &tracking_uri);
+    httpd_uri_t close_eyes_uri = {.uri = "/api/close_eyes",
+                                  .method = HTTP_POST,
+                                  .handler = close_eyes_handler,
+                                  .user_ctx = NULL};
+    httpd_register_uri_handler(server, &close_eyes_uri);
     httpd_uri_t pid_get_uri = {.uri = "/api/pid_params",
                                .method = HTTP_GET,
                                .handler = pid_params_get_handler,

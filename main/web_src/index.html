@@ -832,6 +832,13 @@
                             <span class="slider"></span>
                         </label>
                     </div>
+                    <div class="switch-item">
+                        <span class="switch-label">闭眼</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="closeEyesToggle" onchange="toggleCloseEyes(this)">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
                 </div>
 
                 <div class="action-group">
@@ -854,6 +861,13 @@
                         <span class="switch-label">直接法则</span>
                         <label class="toggle-switch">
                             <input type="checkbox" id="servoRawToggle" onchange="onServoModeChange(this)">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="switch-item">
+                        <span class="switch-label">闭眼</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="closeEyesToggle2" onchange="toggleCloseEyes(this)">
                             <span class="slider"></span>
                         </label>
                     </div>
@@ -1309,6 +1323,25 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ enabled: enabled })
+            }).catch(function () { });
+        }
+        function toggleCloseEyes(checkbox) {
+            var closed = checkbox.checked;
+            // 同步两个闭眼开关
+            document.getElementById('closeEyesToggle').checked = closed;
+            document.getElementById('closeEyesToggle2').checked = closed;
+            fetch('/api/close_eyes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ closed: closed })
+            }).then(function (r) { return r.json(); }).then(function (data) {
+                if (data.closed) {
+                    document.getElementById('trackingToggle').checked = false;
+                    document.getElementById('trackingToggle').disabled = true;
+                } else {
+                    document.getElementById('trackingToggle').disabled = false;
+                    document.getElementById('trackingToggle').checked = data.tracking;
+                }
             }).catch(function () { });
         }
         function snapshot() {

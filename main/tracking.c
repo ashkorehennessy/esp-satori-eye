@@ -90,6 +90,23 @@ static volatile bool edge_chasing;
 static float edge_chase_cx, edge_chase_cy;  // 追逐目标坐标
 static int64_t edge_chase_start;            // 追逐开始时间
 
+// =============================================
+// 自动眨眼
+// =============================================
+#define ENABLE_AUTO_BLINK
+
+#ifdef ENABLE_AUTO_BLINK
+#define BLINK_INTERVAL_US  5000000   // 眨眼间隔 5 秒
+#define BLINK_DURATION_US  150000    // 闭眼持续 150ms
+#define BLINK_CLOSE_ANGLE  130       // 闭眼舵机角度
+
+static int64_t blink_last_time;             // 上次眨眼时间
+static bool blink_active;                   // 是否正在眨眼
+static int64_t blink_start;                 // 眨眼开始时间
+static int16_t blink_saved_s2, blink_saved_s3; // 眨眼前保存的角度
+static void auto_blink_tick(void);
+#endif
+
 void tracking_init(void) {
     // 增量式 PID，输出范围为实际舵机行程
     pid_x = PID_Incremental_Init(s_kp, s_ki, s_kd, SERVO_X_MAX, SERVO_X_MIN, false, 0.5f);
@@ -106,6 +123,11 @@ void tracking_init(void) {
     has_prev_det = false;
     interp_step = INTERP_COUNT;
     in_deadzone = false;
+
+#ifdef ENABLE_AUTO_BLINK
+    blink_last_time = esp_timer_get_time();
+    blink_active = false;
+#endif
 
     ESP_LOGI(TAG, "Tracking initialized — Kp=%.3f Ki=%.3f Kd=%.3f", s_kp, s_ki, s_kd);
 }
@@ -159,12 +181,24 @@ static void pid_to_servo(float cx, float cy) {
     prev_angle_x = angle_x;
     prev_angle_y = angle_y;
 
-    servo_set((int16_t)angle_x, (int16_t)angle_y, CTX()->servo.eyelid);
+#ifdef ENABLE_AUTO_BLINK
+    if (blink_active) {
+        // 眨眼中：只更新 servo1（方向），不动 servo2/servo3
+        servo_set_raw((int16_t)angle_x, BLINK_CLOSE_ANGLE, BLINK_CLOSE_ANGLE);
+    } else
+#endif
+    {
+        servo_set((int16_t)angle_x, (int16_t)angle_y, CTX()->servo.eyelid);
+    }
 }
 
-// === Core 0 每帧调用：插值 + 边界追逐 ===
+// === Core 0 每帧调用：眨眼 + 插值 + 边界追逐 ===
 void tracking_predict(void) {
     if (!CTX()->flags.tracking_enabled) return;
+
+#ifdef ENABLE_AUTO_BLINK
+    auto_blink_tick();
+#endif
 
     // 优先处理插值
     if (interp_step < INTERP_COUNT && has_prev_det) {
@@ -196,6 +230,34 @@ void tracking_predict(void) {
     }
     pid_to_servo(edge_chase_cx, edge_chase_cy);
 }
+
+#ifdef ENABLE_AUTO_BLINK
+// === 自动眨眼状态机（在 predict 后调用）===
+static void auto_blink_tick(void) {
+    if (!CTX()->flags.tracking_enabled) return;
+
+    int64_t now = esp_timer_get_time();
+
+    if (blink_active) {
+        // 闭眼中，等待持续时间到
+        if (now - blink_start >= BLINK_DURATION_US) {
+            // 睗眼：恢复 servo2/3
+            servo_set_raw(CTX()->servo.x, blink_saved_s2, blink_saved_s3);
+            blink_active = false;
+            blink_last_time = now;
+        }
+    } else {
+        // 检查是否到了眨眼时间
+        if (now - blink_last_time >= BLINK_INTERVAL_US) {
+            blink_saved_s2 = CTX()->servo.y;
+            blink_saved_s3 = CTX()->servo.eyelid;
+            servo_set_raw(CTX()->servo.x, BLINK_CLOSE_ANGLE, BLINK_CLOSE_ANGLE);
+            blink_active = true;
+            blink_start = now;
+        }
+    }
+}
+#endif
 
 // === Core 1 调用：AI 检测到目标后立即算 PID ===
 void tracking_correct(float cx, float cy, int x1, int y1, int x2, int y2) {
@@ -230,6 +292,18 @@ void tracking_correct(float cx, float cy, int x1, int y1, int x2, int y2) {
     // 检测到目标 → 取消边界追逐，重置插值计数
     edge_chasing = false;
     interp_step = 0;
+
+    // 根据检测框大小自动控制眼皮开合
+    // 反比例拟合：eyelid = 7200/diag + 24
+    // 近距离(diag≈280)→50%  中距离(diag≈168)→70%  远距离(diag≈95)→100%
+    float dx = (float)(x2 - x1);
+    float dy = (float)(y2 - y1);
+    float diag = sqrtf(dx * dx + dy * dy);
+    if (diag > 1.0f) {
+        float eyelid = 7200.0f / diag + 24.0f;
+        eyelid = clampf(eyelid, 50.0f, 100.0f);
+        CTX()->servo.eyelid = (int16_t)eyelid;
+    }
 
     pid_to_servo(cx, cy);
 }
@@ -279,6 +353,11 @@ void tracking_set_enabled(bool enabled) {
         edge_chasing = false;
         has_prev_det = false;
         interp_step = INTERP_COUNT;
+
+#ifdef ENABLE_AUTO_BLINK
+        blink_last_time = esp_timer_get_time();
+        blink_active = false;
+#endif
     }
     ESP_LOGI(TAG, "Tracking %s", enabled ? "ON" : "OFF");
 }
