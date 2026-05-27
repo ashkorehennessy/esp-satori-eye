@@ -82,13 +82,24 @@ extern "C" void ai_inference_task(void *arg) {
             CTX()->detections.count = count;
             CTX()->detections.timestamp = end_time;
 
-            // 双速率追踪：校正预测器 或 通知丢失
+            // 追踪：选择对角线最长的目标（最大/最近的脸）
             if (count > 0) {
-                float cx = (float)(CTX()->detections.items[0].x1 + CTX()->detections.items[0].x2) / 2.0f;
-                float cy = (float)(CTX()->detections.items[0].y1 + CTX()->detections.items[0].y2) / 2.0f;
+                int best = 0;
+                int best_diag2 = 0; // 对角线长度的平方
+                for (int i = 0; i < count; i++) {
+                    int dx = CTX()->detections.items[i].x2 - CTX()->detections.items[i].x1;
+                    int dy = CTX()->detections.items[i].y2 - CTX()->detections.items[i].y1;
+                    int diag2 = dx * dx + dy * dy;
+                    if (diag2 > best_diag2) {
+                        best_diag2 = diag2;
+                        best = i;
+                    }
+                }
+                float cx = (float)(CTX()->detections.items[best].x1 + CTX()->detections.items[best].x2) / 2.0f;
+                float cy = (float)(CTX()->detections.items[best].y1 + CTX()->detections.items[best].y2) / 2.0f;
                 tracking_correct(cx, cy,
-                    CTX()->detections.items[0].x1, CTX()->detections.items[0].y1,
-                    CTX()->detections.items[0].x2, CTX()->detections.items[0].y2);
+                    CTX()->detections.items[best].x1, CTX()->detections.items[best].y1,
+                    CTX()->detections.items[best].x2, CTX()->detections.items[best].y2);
             } else {
                 tracking_target_lost();
             }
